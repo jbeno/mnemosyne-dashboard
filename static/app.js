@@ -17,7 +17,7 @@ let applyingHistory = false;
 let lastBootError = null;
 let bulkSelection = new Set();
 let reviewSelection = new Set();
-let selectedReviewQueue = 'contaminated';
+let selectedReviewQueue = 'high_importance_contaminated';
 let reviewOffset = 0;
 let latestReviewData = null;
 const REVIEW_PAGE_SIZE = 100;
@@ -145,11 +145,13 @@ function meta(item, opts={}){
   const kind = item.memory_kind || item.tier || item.source || 'memory';
   const veracity = String(item.veracity || 'unknown').toLowerCase();
   const lifecycle = item.degradation_label ? `${item.degradation_label}${item.degradation_tier ? ` · T${item.degradation_tier}` : ''}` : '';
+  const consolidated = item.memory_kind === 'working' && !!item.consolidated_at;
   const importance = Number(item.importance ?? 0);
   const pills = [`<span class="badge kind-badge" title="memory type: ${esc(kind)}">${esc(kind)}</span>`];
   if(status && status !== 'active') pills.push(`<span class="badge status-${esc(status)}" title="status: ${esc(status)}">${esc(status)}</span>`);
   if(veracity && veracity !== 'unknown') pills.push(`<span class="badge trust-${esc(veracity)}" title="veracity: ${esc(veracity)} · recall weight ${Number(item.trust_weight ?? 0).toFixed(2)}">${esc(veracity)}</span>`);
   if(lifecycle) pills.push(`<span class="badge lifecycle-${esc(item.degradation_label)}" title="degradation tier: ${esc(item.degradation_tier)} · recall weight ${Number(item.degradation_weight ?? 1).toFixed(2)}">${esc(lifecycle)}</span>`);
+  if(consolidated) pills.push('<span class="badge status-consolidated" title="This working memory has been consolidated into episodic memory">consolidated</span>');
   if(importance > 0) pills.push(`<span class="badge importance-badge" title="importance: ${importance.toFixed(2)}">${importance.toFixed(2)}</span>`);
   if(scope && scope !== 'session') pills.push(`<span class="badge" title="scope: ${esc(scope)}">${esc(scope)}</span>`);
   if(opts.sessionLink !== false && session && session !== 'default') pills.push(`<button type="button" class="badge session-link" data-session="${esc(session)}" title="Open session: ${esc(session)}">${esc(shortId(session))}</button>`);
@@ -472,13 +474,18 @@ async function loadStats(){
   $('#dbPath').textContent = s.db_path;
   $('#dbPath').title = s.db_path;
   const cards = [
-    ['Working', s.counts.working_memory], ['Episodic', s.counts.episodic_memory], ['Needs review', s.contamination?.total || 0], ['Degraded', s.degradation?.degraded || 0], ['Triples', s.counts.triples], ['Consolidations', s.counts.consolidation_log]
+    ['Working active', s.working_memory?.unconsolidated ?? s.counts.working_memory], ['Episodic', s.counts.episodic_memory], ['Review candidates', s.review?.active_candidates || 0], ['Degraded', s.degradation?.degraded || 0], ['Triples', s.counts.triples], ['Consolidations', s.counts.consolidation_log]
   ];
   $('#cards').innerHTML = cards.map(([label,num]) => `<div class="card"><div class="num">${Number(num).toLocaleString()}</div><div class="label">${label}</div></div>`).join('');
   $('#sourceBreakdown').innerHTML = breakdown(s.by_source, 'source');
   $('#scopeBreakdown').innerHTML = breakdown(s.by_scope, 'scope');
   $('#sessionBreakdown').innerHTML = breakdown(s.by_session, 'session_id', 6);
   $('#veracityBreakdown').innerHTML = breakdown(s.by_veracity || [], 'veracity', 8);
+  $('#workingBreakdown').innerHTML = tinyRows([
+    {label:'Unconsolidated', count:s.working_memory?.unconsolidated ?? s.counts.working_memory},
+    {label:'Consolidated', count:s.working_memory?.consolidated || 0},
+    {label:'Retained total', count:s.working_memory?.total ?? s.counts.working_memory},
+  ]);
   $('#degradationBreakdown').innerHTML = breakdown(s.by_degradation || [], 'degradation_label', 8);
   fillSelect($('#memorySource'), optionsFrom(s.by_source, 'source'), 'all sources');
   fillSelect($('#memoryScope'), optionsFrom(s.by_scope, 'scope'), 'all scopes');
@@ -1022,7 +1029,7 @@ async function loadTodayDigest(day=''){
   const suffix = day ? `&day=${encodeURIComponent(day)}` : '';
   const data = await api(`/api/digest/today?limit=80${suffix}`);
   const c = data.counts || {};
-  $('#todayCards').innerHTML = [['Added', c.memories_added], ['Retrieved', c.memories_recalled], ['Needs review', c.contaminated_added], ['Lifecycle changes', c.degraded_added], ['Facts', c.triples_added], ['Consolidations', c.consolidations]].map(([label,num]) => `<div class="card"><div class="num">${Number(num || 0).toLocaleString()}</div><div class="label">${label}</div></div>`).join('');
+  $('#todayCards').innerHTML = [['Added', c.memories_added], ['Retrieved', c.memories_recalled], ['Non-stated provenance', c.contaminated_added], ['Lifecycle changes', c.degraded_added], ['Facts', c.triples_added], ['Consolidations', c.consolidations]].map(([label,num]) => `<div class="card"><div class="num">${Number(num || 0).toLocaleString()}</div><div class="label">${label}</div></div>`).join('');
   $('#todayEntities').innerHTML = tinyRows(data.breakdowns?.entities || []);
   $('#todayVeracity').innerHTML = tinyRows(data.breakdowns?.veracity || []);
   $('#todayDegradation').innerHTML = tinyRows(data.breakdowns?.degradation || []);
@@ -1131,8 +1138,9 @@ function applyReviewFilter(filter={}){
 }
 function reviewReasonBadges(key, item={}){
   const reasons = [];
-  if(key === 'contaminated' || item.veracity && item.veracity !== 'stated') reasons.push('Needs review');
-  if(key === 'important_contaminated' || Number(item.importance || 0) >= 0.75) reasons.push('High importance');
+  if(key === 'high_importance_contaminated') reasons.push('Review candidate');
+  else if(key === 'contaminated' || item.veracity && item.veracity !== 'stated') reasons.push('Non-stated provenance');
+  if(key === 'high_importance_contaminated' || Number(item.importance || 0) > 0.5) reasons.push('Higher importance');
   if(key === 'degraded' || Number(item.degradation_tier || 1) > 1) reasons.push('Degraded');
   if(key === 'due_degradation') reasons.push('Due for degradation');
   return [...new Set(reasons)].map(reason => `<span>${esc(reason)}</span>`).join('');

@@ -194,7 +194,7 @@ class DashboardStore:
         fields = [
             "id", "content", "source", "timestamp", "session_id", "importance", "metadata_json",
             "created_at", "recall_count", "last_recalled", "valid_until", "superseded_by",
-            "scope", "author_id", "author_type", "channel_id",
+            "scope", "author_id", "author_type", "channel_id", "consolidated_at",
         ]
         select = [name if name in columns else f"NULL AS {name}" for name in fields]
         select.append("veracity" if "veracity" in columns else "'unknown' AS veracity")
@@ -477,6 +477,13 @@ class DashboardStore:
             veracity_counts: Counter[str] = Counter()
             contaminated_total = 0
             contaminated_high = 0
+            active_non_stated = 0
+            active_review_candidates = 0
+            working_status = {
+                "total": counts.get("working_memory", 0),
+                "unconsolidated": counts.get("working_memory", 0),
+                "consolidated": 0,
+            }
             degradation_counts: Counter[str] = Counter({label: 0 for label in DEGRADATION_LABELS.values()})
             degraded_count = 0
             due_tier2 = 0
@@ -495,6 +502,11 @@ class DashboardStore:
                 if table not in tables:
                     continue
                 columns = self._columns(con, table)
+                if table == "working_memory" and "consolidated_at" in columns:
+                    working_status["consolidated"] = int(con.execute(
+                        "SELECT COUNT(*) FROM working_memory WHERE consolidated_at IS NOT NULL AND consolidated_at != ''"
+                    ).fetchone()[0])
+                    working_status["unconsolidated"] = working_status["total"] - working_status["consolidated"]
                 by_source_raw += [dict(r, tier=memory_kind, memory_kind=memory_kind) for r in con.execute(
                     f"SELECT COALESCE(source,'') AS source, count(*) AS count FROM {table} GROUP BY source ORDER BY count DESC LIMIT 20"
                 )]
@@ -516,6 +528,22 @@ class DashboardStore:
                 contaminated_clause = f"{veracity_expr} IN ('inferred','tool','imported','unknown')"
                 contaminated_high += int(con.execute(
                     f"SELECT COUNT(*) FROM {table} WHERE {contaminated_clause} AND COALESCE(importance, 0) > 0.5"
+                ).fetchone()[0])
+                active_parts = []
+                active_params: list[Any] = []
+                if "superseded_by" in columns:
+                    active_parts.append("COALESCE(superseded_by, '') = ''")
+                if "valid_until" in columns:
+                    active_parts.append("(valid_until IS NULL OR valid_until = '' OR valid_until > ?)")
+                    active_params.append(_utc_now())
+                active_clause = " AND ".join(active_parts) or "1 = 1"
+                active_non_stated += int(con.execute(
+                    f"SELECT COUNT(*) FROM {table} WHERE {contaminated_clause} AND {active_clause}",
+                    active_params,
+                ).fetchone()[0])
+                active_review_candidates += int(con.execute(
+                    f"SELECT COUNT(*) FROM {table} WHERE {contaminated_clause} AND {active_clause} AND COALESCE(importance, 0) > 0.5",
+                    active_params,
                 ).fetchone()[0])
                 if table == "episodic_memory":
                     tier_expr = "COALESCE(tier, 1)" if "tier" in columns else "1"
@@ -556,9 +584,17 @@ class DashboardStore:
                 "by_session": by_session,
                 "by_veracity": by_veracity,
                 "by_degradation": by_degradation,
+                "working_memory": working_status,
+                "review": {
+                    "active_candidates": active_review_candidates,
+                    "active_non_stated": active_non_stated,
+                    "importance_threshold": 0.5,
+                },
                 "contamination": {
                     "total": contaminated_total,
                     "high_importance": contaminated_high,
+                    "active": active_non_stated,
+                    "active_high_importance": active_review_candidates,
                     "veracities": sorted(CONTAMINATED_VERACITIES),
                 },
                 "degradation": {
@@ -730,18 +766,18 @@ class DashboardStore:
         """Trust/lifecycle review queues for Mnemosyne 2.3 metadata."""
         limit = max(1, min(int(limit or 50), 500))
         offset = max(0, int(offset or 0))
-        queue = (queue or "").strip() or "contaminated"
+        queue = (queue or "").strip() or "high_importance_contaminated"
         queue_defs = {
-            "contaminated": {
-                "title": "Needs review",
-                "description": "Memories not directly stated by you: inferred, tool-generated, imported, or unknown.",
-                "args": {"kind": "all", "status": "active", "contaminated_only": True, "sort": "importance"},
+            "high_importance_contaminated": {
+                "title": "Review candidates",
+                "description": "Active, higher-importance memories whose provenance is inferred, tool-generated, imported, or unknown. Review is optional; these are not automatically errors.",
+                "args": {"kind": "all", "status": "active", "contaminated_only": True, "sort": "importance", "min_importance": 0.500001},
                 "filter": {"contaminated_only": "1", "sort": "importance"},
             },
-            "high_importance_contaminated": {
-                "title": "Important memories needing review",
-                "description": "Important memories that were inferred, tool-generated, imported, or unknown.",
-                "args": {"kind": "all", "status": "active", "contaminated_only": True, "sort": "importance", "min_importance": 0.500001},
+            "contaminated": {
+                "title": "Active non-stated provenance",
+                "description": "All active memories not directly stated by you. This is a provenance view, not a maintenance backlog.",
+                "args": {"kind": "all", "status": "active", "contaminated_only": True, "sort": "importance"},
                 "filter": {"contaminated_only": "1", "sort": "importance"},
             },
             "degraded": {
@@ -758,7 +794,7 @@ class DashboardStore:
             },
         }
         if queue not in queue_defs:
-            queue = "contaminated"
+            queue = "high_importance_contaminated"
         try:
             min_importance_value = float(min_importance) if min_importance not in (None, "") else None
         except (TypeError, ValueError):
