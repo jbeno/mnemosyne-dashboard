@@ -6,7 +6,7 @@
   <title>Mnemosyne Dashboard</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/static/brand-fonts.css" />
-  <link rel="stylesheet" href="/static/style.css?v=0.15.0" />
+  <link rel="stylesheet" href="/static/style.css?v=0.15.0-ui2" />
 </head>
 <body>
   <div class="aurora aurora-one"></div>
@@ -15,21 +15,22 @@
     <aside class="sidebar">
       <div class="mobile-topbar">
         <button class="brand compact-brand brand-home" data-jump="overview" aria-label="Open Overview dashboard">
-          <div class="brand-mark">M</div>
-          <div>
+          <div class="brand-mark" aria-hidden="true"><span class="brand-glyph"></span></div>
+          <div class="brand-copy">
             <div class="brand-name">Mnemosyne</div>
             <div class="brand-sub">Hermes Memory</div>
           </div>
         </button>
         <div class="mobile-topbar-actions">
+          <select id="mobileDbSelector" class="db-selector mobile-db-selector hidden" aria-label="Active Mnemosyne database"></select>
           <button id="mobileThemeToggle" class="theme-toggle topbar-theme-toggle" aria-label="Toggle theme"><span class="theme-icon" id="mobileThemeIcon">☾</span><strong class="theme-label" id="mobileThemeLabel">Dark</strong></button>
           <button id="mobileMenuToggle" class="mobile-menu-toggle" aria-expanded="false" aria-label="Open menu">☰</button>
         </div>
       </div>
       <div id="sidebarMenu" class="sidebar-menu">
       <button class="brand desktop-brand brand-home" data-jump="overview" aria-label="Open Overview dashboard">
-        <div class="brand-mark">M</div>
-        <div>
+        <div class="brand-mark" aria-hidden="true"><span class="brand-glyph"></span></div>
+        <div class="brand-copy">
           <div class="brand-name">Mnemosyne</div>
           <div class="brand-sub">Hermes Memory</div>
         </div>
@@ -54,6 +55,12 @@
         <button data-tab="activity"><span>HS</span>History</button>
         <button data-tab="settings"><span>ST</span>Settings</button>
       </nav>
+      <div class="sidebar-control db-switcher">
+        <span>Database</span>
+        <select id="dbSelector" class="db-selector hidden" aria-label="Active Mnemosyne database"></select>
+        <div id="dbPath" class="db-path">loading…</div>
+        <div id="dbSwitchStatus" class="db-switch-status hidden" role="status" aria-live="polite"></div>
+      </div>
       <div class="theme-switch glass-mini">
         <span>Theme</span>
         <button id="themeToggle" class="theme-toggle" aria-label="Toggle theme"><span class="theme-icon" id="themeIcon">☾</span><strong class="theme-label" id="themeLabel">Dark</strong></button>
@@ -68,16 +75,10 @@
           <h1>Private memory, cleanly mapped.</h1>
           <p>Search, review, and trace working memories, summaries, triples, and consolidation history from one local dashboard.</p>
         </div>
-        <div class="status-card">
-          <div class="status-label">Database</div>
-          <select id="dbSelector" class="db-selector hidden" aria-label="Active Mnemosyne brain"></select>
-          <div id="dbPath" class="db-path">loading…</div>
-          <div id="dbSwitchStatus" class="db-switch-status hidden" role="status" aria-live="polite"></div>
-          <div id="bootError" class="state-card state-error hidden" role="alert" aria-live="polite"></div>
-        </div>
       </header>
 
       <main>
+        <div id="bootError" class="state-card state-error global-boot-error hidden" role="alert" aria-live="polite"></div>
         <section id="overview" class="tab active">
           <div id="cards" class="cards"></div>
           <div class="breakdowns">
@@ -500,7 +501,7 @@
 
   <div id="loginOverlay" class="login-overlay hidden">
     <div class="login-card glass">
-      <div class="brand compact-brand"><div class="brand-mark">M</div><div><div class="brand-name">Mnemosyne</div><div class="brand-sub">Hermes Memory</div></div></div>
+      <div class="brand compact-brand"><div class="brand-mark" aria-hidden="true"><span class="brand-glyph"></span></div><div class="brand-copy"><div class="brand-name">Mnemosyne</div><div class="brand-sub">Hermes Memory</div></div></div>
       <h2>Password required</h2>
       <p class="muted">This dashboard has optional password auth enabled.</p>
       <input id="loginPassword" type="password" placeholder="Password" />
@@ -510,6 +511,6 @@
   </div>
 
   <div id="detail" class="drawer hidden"><button id="closeDetail" aria-label="Close detail">×</button><div class="drawer-title">Detail</div><pre id="detailBody"></pre></div>
-  <script src="/static/app.js?v=0.15.0"></script>
+  <script src="/static/app.js?v=0.15.0-ui2"></script>
 </body>
 </html>

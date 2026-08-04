@@ -2,13 +2,14 @@
 
 ## 0.15.0
 
-- Add a database selector on the Overview page to switch between Mnemosyne databases at runtime without restarting.
+- Add a global database selector to the desktop rail and compact mobile header so Mnemosyne databases can be switched at runtime without restarting.
 - Discover direct-profile and bank-style Hermes brains automatically, including when `HERMES_HOME` points at an isolated profile; switching stays read-only and limited to the discovered/configured set.
 - Close SQLite connections after every request to prevent the dashboard from exhausting file descriptors during persistent operation.
 - Fix invisible Overview stat numbers in light mode.
 - Replace the misleading all-time “Needs review” headline with active, higher-importance review candidates while preserving non-stated provenance counts separately.
 - Split retained working memory into unconsolidated and consolidated counts and mark consolidated records in the browser.
 - Add Persona and Canonical Facts views, filters, aggregate counts, and canonical-fact global search.
+- Keep responsive navigation in one column, replace the misaligned lettermark with a centered geometric mark, and remove redundant shell-level containers.
 - Document standalone use without Hermes and the maintained-fork workflow.
 
 ## 0.14.0
