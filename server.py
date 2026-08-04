@@ -265,6 +265,7 @@ class Handler(BaseHTTPRequestHandler):
     def _auth_status(self) -> dict[str, Any]:
         cfg = self.cfg
         return {
+            "version": VERSION,
             "auth_enabled": cfg.auth_enabled,
             "has_password": cfg.has_password,
             "authenticated": self._authenticated(),
@@ -311,7 +312,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/":
                 return self._send_file(STATIC / "index.html")
             if path == "/favicon.ico":
-                return self._send_file(STATIC / "favicon.svg")
+                return self._send_file(STATIC / "mnemosyne-avatar-64.png")
             if path.startswith("/static/"):
                 rel = urllib.parse.unquote(path.removeprefix("/static/"))
                 if rel.startswith(("/", "\\")):
@@ -322,7 +323,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/auth/status":
                 return self._send_json(self._auth_status())
             if path == "/api/health":
-                return self._send_json({"ok": True, "service": "mnemosyne-dashboard", "read_only": not self.cfg.memory_admin_enabled, "config": public_config(self.cfg)})
+                return self._send_json({"ok": True, "service": "mnemosyne-dashboard", "version": VERSION, "read_only": not self.cfg.memory_admin_enabled, "config": public_config(self.cfg)})
             if path == "/api/config":
                 return self._send_json({"ok": True, "config": public_config(self.cfg)})
             if path == "/api/databases":

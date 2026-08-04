@@ -10,6 +10,7 @@
 - Split retained working memory into unconsolidated and consolidated counts and mark consolidated records in the browser.
 - Add Persona and Canonical Facts views, filters, aggregate counts, and canonical-fact global search.
 - Keep responsive navigation in one column, replace the misaligned lettermark with a centered geometric mark, and remove redundant shell-level containers.
+- Add a Mnemosyne portrait identity across the application icon, navigation, login, favicon, and a new About screen with live version and database details.
 - Document standalone use without Hermes and the maintained-fork workflow.
 
 ## 0.14.0
