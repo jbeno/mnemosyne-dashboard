@@ -129,6 +129,24 @@ def test_memory_intelligence_endpoints_are_read_only(tmp_path, monkeypatch):
         server.close()
 
 
+def test_persona_and_canonical_endpoints(tmp_path, monkeypatch):
+    server = ServerHarness(tmp_path, monkeypatch)
+    try:
+        status, _headers, body = _request(f"{server.base}/api/persona?tier=permanent&q=local-only")
+        payload = json.loads(body)
+        assert status == 200
+        assert payload["stats"]["total"] == 1
+        assert [row["topic"] for row in payload["items"]] == ["preferences"]
+
+        status, _headers, body = _request(f"{server.base}/api/canonical?owner_id=default&q=Jim")
+        payload = json.loads(body)
+        assert status == 200
+        assert payload["stats"]["total"] == 1
+        assert [row["name"] for row in payload["items"]] == ["user_name"]
+    finally:
+        server.close()
+
+
 def test_config_post_updates_server_and_database_settings(tmp_path, monkeypatch):
     server = ServerHarness(tmp_path, monkeypatch)
     try:
@@ -307,4 +325,3 @@ def test_databases_select_requires_auth_when_enabled(tmp_path, monkeypatch):
         assert b"auth required" in body
     finally:
         server.close()
-
