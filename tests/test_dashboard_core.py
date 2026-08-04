@@ -22,7 +22,7 @@ def make_db(path: Path):
         recall_count INTEGER DEFAULT 0, last_recalled TIMESTAMP DEFAULT NULL,
         valid_until TIMESTAMP DEFAULT NULL, superseded_by TEXT DEFAULT NULL,
         scope TEXT DEFAULT 'global', author_id TEXT, author_type TEXT, channel_id TEXT,
-        veracity TEXT DEFAULT 'unknown'
+        veracity TEXT DEFAULT 'unknown', consolidated_at TIMESTAMP DEFAULT NULL
     );
     CREATE TABLE episodic_memory (
         rowid INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,6 +66,7 @@ def make_db(path: Path):
     con.execute("INSERT INTO consolidation_log(session_id,items_consolidated,summary_preview) VALUES (?,?,?)",
                 ('s2',3,'Dashboard work'))
     con.execute("UPDATE working_memory SET veracity = 'stated' WHERE id = 'w1'")
+    con.execute("UPDATE working_memory SET consolidated_at = '2026-05-05T02:00:00' WHERE id = 'w2'")
     con.execute("UPDATE working_memory SET veracity = 'tool' WHERE id = 'w4'")
     con.execute("UPDATE episodic_memory SET veracity = 'inferred', tier = 2, degraded_at = '2026-05-05T00:00:00' WHERE id = 'e1'")
     con.execute("UPDATE episodic_memory SET veracity = 'imported', tier = 3, degraded_at = '2026-05-05T01:00:00' WHERE id = 'e2'")
@@ -171,6 +172,14 @@ def test_stats_exposes_v23_trust_and_degradation_mix(tmp_path):
     }
     assert stats['contamination']['total'] == 5
     assert stats['contamination']['high_importance'] == 2
+    assert stats['contamination']['active'] == 5
+    assert stats['contamination']['active_high_importance'] == 2
+    assert stats['review'] == {
+        'active_candidates': 2,
+        'active_non_stated': 5,
+        'importance_threshold': 0.5,
+    }
+    assert stats['working_memory'] == {'total': 4, 'unconsolidated': 3, 'consolidated': 1}
     assert stats['degradation']['degraded'] == 2
 
 
@@ -218,7 +227,7 @@ def test_review_queues_surface_trust_lifecycle_work(tmp_path):
 
     review = store.review_queues(queue='high_importance_contaminated', limit=10)
     assert review['read_only'] is True
-    assert [card['key'] for card in review['cards']] == ['contaminated', 'high_importance_contaminated', 'degraded', 'due_for_degradation']
+    assert [card['key'] for card in review['cards']] == ['high_importance_contaminated', 'contaminated', 'degraded', 'due_for_degradation']
     assert review['counts']['contaminated'] == 5
     assert review['counts']['high_importance_contaminated'] == 2
     assert review['counts']['degraded'] == 2
@@ -226,12 +235,16 @@ def test_review_queues_surface_trust_lifecycle_work(tmp_path):
     assert [item['id'] for item in review['queues']['high_importance_contaminated']['items']] == ['w4', 'e1']
     assert all(item['status'] == 'active' for item in review['queues']['high_importance_contaminated']['items'])
     assert review['queues']['degraded']['items'] == []
-    assert review['queues']['contaminated']['title'] == 'Needs review'
-    assert review['queues']['high_importance_contaminated']['title'] == 'Important memories needing review'
+    assert review['queues']['contaminated']['title'] == 'Active non-stated provenance'
+    assert review['queues']['high_importance_contaminated']['title'] == 'Review candidates'
     assert review['queues']['degraded']['title'] == 'Degraded'
     assert review['queues']['contaminated']['filter']['contaminated_only'] == '1'
     assert review['queues']['degraded']['filter']['degraded_only'] == '1'
     assert review['queues']['due_for_degradation']['filter']['due_for_degradation'] == '1'
+    stats = store.stats()
+    assert stats['contamination']['total'] == 7
+    assert stats['contamination']['active'] == 5
+    assert stats['review']['active_candidates'] == 2
 
 
 def test_review_queues_page_selected_queue_and_filter_by_importance(tmp_path):

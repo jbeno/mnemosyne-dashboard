@@ -347,7 +347,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send_json(self.store.today_digest(day=q.get("day", ""), limit=_safe_int(q.get("limit"), 80, maximum=300)))
             if path == "/api/review":
                 return self._send_json(self.store.review_queues(
-                    queue=q.get("queue", "contaminated"), q=q.get("q", ""),
+                    queue=q.get("queue", "high_importance_contaminated"), q=q.get("q", ""),
                     min_importance=q.get("min_importance", ""),
                     limit=_safe_int(q.get("limit"), 100, maximum=500),
                     offset=_safe_int(q.get("offset"), 0, minimum=0, maximum=100000),
