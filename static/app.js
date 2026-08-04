@@ -1,6 +1,7 @@
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 const THEME_KEY = 'mnemosyne-dashboard-theme';
+const APP_VERSION = '0.15.0';
 const VISUALISER_MODE_KEY = 'mnemosyne-dashboard-visualiser-mode';
 let graphState = { nodes: [], edges: [], byId: {} };
 let consolidationState = [];
@@ -473,8 +474,22 @@ function switchTab(name, opts={}){
   if(section==='visualiser3d') loadThreeVisualiser();
   if(section==='memoryPalace') loadMemoryPalace();
   if(section==='settings') { loadAuthStatus(); loadDiagnostics(); loadRuntimeDiagnostics(); loadRealtimePanel(); }
+  if(section==='about') loadAbout();
   if(section==='memoria') loadMemoria();
   if(section==='personafacts') loadPersonaFacts();
+}
+
+function loadAbout(){
+  const version = authState.version || APP_VERSION;
+  const engineVersion = realtimeState.status?.mnemosyne_version || 'unknown';
+  const activeDatabase = $('#dbSelector')?.selectedOptions?.[0]?.textContent || $('#mobileDbSelector')?.selectedOptions?.[0]?.textContent || 'Configured database';
+  if($('#aboutDashboardVersion')) $('#aboutDashboardVersion').textContent = `v${version}`;
+  if($('#aboutDashboardBuild')) $('#aboutDashboardBuild').textContent = `Mnemosyne Dashboard ${version}`;
+  if($('#aboutMnemosyneVersion')) $('#aboutMnemosyneVersion').textContent = engineVersion;
+  if($('#aboutDatabase')) {
+    $('#aboutDatabase').textContent = activeDatabase;
+    $('#aboutDatabase').title = $('#dbPath')?.title || '';
+  }
 }
 
 async function loadPersonaFacts(){

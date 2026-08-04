@@ -93,8 +93,8 @@ def test_favicon_route_serves_icon_without_404(tmp_path, monkeypatch):
     try:
         status, headers, body = _request(f"{server.base}/favicon.ico")
         assert status == 200
-        assert headers["Content-Type"].startswith("image/svg+xml")
-        assert b"<svg" in body
+        assert headers["Content-Type"].startswith("image/png")
+        assert body.startswith(b"\x89PNG\r\n\x1a\n")
     finally:
         server.close()
 

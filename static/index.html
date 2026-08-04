@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Mnemosyne Dashboard</title>
-  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/static/mnemosyne-avatar-64.png" type="image/png" />
   <link rel="stylesheet" href="/static/brand-fonts.css" />
-  <link rel="stylesheet" href="/static/style.css?v=0.15.0-ui2" />
+  <link rel="stylesheet" href="/static/style.css?v=0.15.0-ui3" />
 </head>
 <body>
   <div class="aurora aurora-one"></div>
@@ -15,7 +15,7 @@
     <aside class="sidebar">
       <div class="mobile-topbar">
         <button class="brand compact-brand brand-home" data-jump="overview" aria-label="Open Overview dashboard">
-          <div class="brand-mark" aria-hidden="true"><span class="brand-glyph"></span></div>
+          <div class="brand-mark" aria-hidden="true"><img class="brand-avatar" src="/static/mnemosyne-avatar-256.png" alt="" /></div>
           <div class="brand-copy">
             <div class="brand-name">Mnemosyne</div>
             <div class="brand-sub">Hermes Memory</div>
@@ -29,7 +29,7 @@
       </div>
       <div id="sidebarMenu" class="sidebar-menu">
       <button class="brand desktop-brand brand-home" data-jump="overview" aria-label="Open Overview dashboard">
-        <div class="brand-mark" aria-hidden="true"><span class="brand-glyph"></span></div>
+        <div class="brand-mark" aria-hidden="true"><img class="brand-avatar" src="/static/mnemosyne-avatar-256.png" alt="" /></div>
         <div class="brand-copy">
           <div class="brand-name">Mnemosyne</div>
           <div class="brand-sub">Hermes Memory</div>
@@ -54,6 +54,7 @@
         <button data-tab="personafacts" data-title="Persona &amp; Canonical Facts"><span>PF</span>Persona &amp; Facts</button>
         <button data-tab="activity"><span>HS</span>History</button>
         <button data-tab="settings"><span>ST</span>Settings</button>
+        <button data-tab="about"><span>AB</span>About</button>
       </nav>
       <div class="sidebar-control db-switcher">
         <span>Database</span>
@@ -491,17 +492,43 @@
             <div class="table-wrap"><table><thead><tr><th>Owner</th><th>Category</th><th>Name</th><th>Body</th><th>Version</th></tr></thead><tbody id="canonicalRows"></tbody></table></div>
           </div>
         </section>
+
+        <section id="about" class="tab about-page">
+          <div class="about-layout">
+            <figure class="about-art">
+              <img src="/static/mnemosyne-portrait-512.png" alt="Mnemosyne, keeper of memory, rendered in a classical celestial portrait" />
+            </figure>
+            <div class="about-copy">
+              <div class="eyebrow">Hermes memory console</div>
+              <h2>Mnemosyne</h2>
+              <p class="about-lede">A private, local-first interface for understanding the memories, context, history, and knowledge that shape your Hermes agents.</p>
+              <div class="about-version"><span>Maintained fork</span><strong id="aboutDashboardVersion">v0.15.0</strong></div>
+              <dl class="about-details">
+                <div><dt>Dashboard</dt><dd id="aboutDashboardBuild">Mnemosyne Dashboard 0.15.0</dd></div>
+                <div><dt>Memory engine</dt><dd id="aboutMnemosyneVersion">Detecting…</dd></div>
+                <div><dt>Active database</dt><dd id="aboutDatabase">Detecting…</dd></div>
+                <div><dt>Safety model</dt><dd>Local-first · read-only by default</dd></div>
+              </dl>
+              <div class="about-links">
+                <a href="https://github.com/jbeno/mnemosyne-dashboard" target="_blank" rel="noopener noreferrer">Maintained fork</a>
+                <a href="https://github.com/wysie/mnemosyne-dashboard" target="_blank" rel="noopener noreferrer">Original project</a>
+                <a href="https://github.com/NousResearch/hermes-agent" target="_blank" rel="noopener noreferrer">Hermes Agent</a>
+              </div>
+              <p class="about-credit">Forked from the original dashboard by wysie to move maintenance and current Mnemosyne support forward. Mnemosyne was created by AxDSan.</p>
+            </div>
+          </div>
+        </section>
       </main>
 
       <footer class="app-footer">
-        Built by <a href="https://github.com/wysie" target="_blank" rel="noopener noreferrer">wysie</a> with <a href="https://github.com/NousResearch/hermes-agent" target="_blank" rel="noopener noreferrer">Hermes Agent</a> · Thanks to <a href="https://github.com/AxDSan" target="_blank" rel="noopener noreferrer">AxDSan</a> for creating <a href="https://github.com/AxDSan/mnemosyne" target="_blank" rel="noopener noreferrer">Mnemosyne</a>
+        Mnemosyne Dashboard · private memory, locally observed
       </footer>
     </div>
   </div>
 
   <div id="loginOverlay" class="login-overlay hidden">
     <div class="login-card glass">
-      <div class="brand compact-brand"><div class="brand-mark" aria-hidden="true"><span class="brand-glyph"></span></div><div class="brand-copy"><div class="brand-name">Mnemosyne</div><div class="brand-sub">Hermes Memory</div></div></div>
+      <div class="brand compact-brand"><div class="brand-mark" aria-hidden="true"><img class="brand-avatar" src="/static/mnemosyne-avatar-256.png" alt="" /></div><div class="brand-copy"><div class="brand-name">Mnemosyne</div><div class="brand-sub">Hermes Memory</div></div></div>
       <h2>Password required</h2>
       <p class="muted">This dashboard has optional password auth enabled.</p>
       <input id="loginPassword" type="password" placeholder="Password" />
@@ -511,6 +538,6 @@
   </div>
 
   <div id="detail" class="drawer hidden"><button id="closeDetail" aria-label="Close detail">×</button><div class="drawer-title">Detail</div><pre id="detailBody"></pre></div>
-  <script src="/static/app.js?v=0.15.0-ui2"></script>
+  <script src="/static/app.js?v=0.15.0-ui3"></script>
 </body>
 </html>
