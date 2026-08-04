@@ -558,27 +558,30 @@ function setDbSwitchStatus(message='', isError=false){
   el.classList.toggle('is-error', !!isError);
 }
 async function loadDatabases(){
-  const sel = $('#dbSelector');
+  const selectors = $$('#dbSelector, #mobileDbSelector');
   const pathEl = $('#dbPath');
-  if(!sel) return;
+  if(!selectors.length) return;
   let data;
   try { data = await api('/api/databases'); }
   catch { return; }
   const dbs = data.databases || [];
   // With a single brain there is nothing to switch between; keep the plain path text.
   if(dbs.length <= 1){
-    sel.classList.add('hidden');
+    selectors.forEach(sel => sel.classList.add('hidden'));
     pathEl?.classList.remove('hidden');
     return;
   }
-  sel.innerHTML = dbs.map(d => `<option value="${esc(d.path)}"${d.active ? ' selected' : ''}>${esc(d.label)}</option>`).join('');
-  sel.title = data.active || '';
-  sel.classList.remove('hidden');
+  const options = dbs.map(d => `<option value="${esc(d.path)}"${d.active ? ' selected' : ''}>${esc(d.label)}</option>`).join('');
+  selectors.forEach(sel => {
+    sel.innerHTML = options;
+    sel.title = data.active || '';
+    sel.classList.remove('hidden');
+  });
   pathEl?.classList.add('hidden');
 }
 async function selectDatabase(path){
-  const sel = $('#dbSelector');
-  if(sel) sel.disabled = true;
+  const selectors = $$('#dbSelector, #mobileDbSelector');
+  selectors.forEach(sel => { sel.disabled = true; });
   setDbSwitchStatus('Switching brain…');
   try {
     const r = await postJson('/api/databases/select', { path });
@@ -591,7 +594,7 @@ async function selectDatabase(path){
     setDbSwitchStatus(`Could not switch: ${e.message}`, true);
     await loadDatabases();
   } finally {
-    if(sel) sel.disabled = false;
+    selectors.forEach(sel => { sel.disabled = false; });
   }
 }
 function renderRealtimeStatus(){
@@ -3843,6 +3846,7 @@ $('#viewAuditLog').onclick = async () => {
   catch(e){ $('#memoryAdminStatus').textContent = e.message; }
 };
 $('#dbSelector')?.addEventListener('change', e => selectDatabase(e.target.value));
+$('#mobileDbSelector')?.addEventListener('change', e => selectDatabase(e.target.value));
 $('#retryBootstrap').onclick = () => bootstrapDashboard().catch(handleInitError);
 $('#copyBootError').onclick = copyBootErrorDetails;
 $('#logoutAuth').onclick = async () => { await postJson('/api/auth/logout', {}); showLogin(); };
