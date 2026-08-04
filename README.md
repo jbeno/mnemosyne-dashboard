@@ -1,17 +1,24 @@
 # Mnemosyne Dashboard
 
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/H2H1ZAPL)
-
-A local-first web dashboard for browsing, visualising, and safely maintaining a Mnemosyne memory store from Hermes Agent.
+A local-first web dashboard for browsing, visualising, and safely maintaining a Mnemosyne memory store, with optional Hermes Agent plugin integration.
 
 It is intentionally small: Python standard library server, static HTML/CSS/JS frontend, no external JS runtime, no cloud calls, and read-only browsing by default. Optional password-gated maintenance mode supports safe Mnemosyne-style memory supersession/expiry without hard deletes or raw overwrite edits.
+
+## Maintained fork
+
+This is the `jbeno/mnemosyne-dashboard` maintained fork of the original
+[`wysie/mnemosyne-dashboard`](https://github.com/wysie/mnemosyne-dashboard).
+The fork exists to move outstanding fixes and current Mnemosyne/Hermes support
+forward while preserving attribution and the original project’s local-first,
+read-only-by-default safety model. See [MAINTENANCE.md](MAINTENANCE.md) for the
+update and contribution policy.
 
 ## Installation as a Hermes plugin
 
 Install directly from GitHub with the Hermes plugin command:
 
 ```bash
-hermes plugins install wysie/mnemosyne-dashboard --enable
+hermes plugins install jbeno/mnemosyne-dashboard --enable
 ```
 
 Then restart the running Hermes process so plugin tools are discovered. For the gateway:
@@ -23,7 +30,7 @@ hermes gateway restart
 Manual clone is also supported if you are developing the plugin locally:
 
 ```bash
-git clone https://github.com/wysie/mnemosyne-dashboard.git ~/.hermes/plugins/mnemosyne-dashboard
+git clone https://github.com/jbeno/mnemosyne-dashboard.git ~/.hermes/plugins/mnemosyne-dashboard
 hermes plugins enable mnemosyne-dashboard
 hermes gateway restart
 ```
@@ -31,7 +38,7 @@ hermes gateway restart
 If the directory already exists and you intentionally want to replace it, use:
 
 ```bash
-hermes plugins install wysie/mnemosyne-dashboard --enable --force
+hermes plugins install jbeno/mnemosyne-dashboard --enable --force
 ```
 
 `--force` deletes the existing plugin directory before reinstalling, so back up any plugin-local changes first.
@@ -48,7 +55,7 @@ hermes gateway restart
 If you want to force a clean reinstall from GitHub instead of pulling into the existing directory:
 
 ```bash
-hermes plugins install wysie/mnemosyne-dashboard --enable --force
+hermes plugins install jbeno/mnemosyne-dashboard --enable --force
 hermes gateway restart
 ```
 
@@ -230,6 +237,17 @@ Environment overrides are also supported:
 - `MNEMOSYNE_DB_PATH` / `MNEMOSYNE_DB` — also considered during first-run DB auto-detection
 
 ## Manual run
+
+Hermes is not a runtime dependency. To use the dashboard with any compatible
+Mnemosyne SQLite database, pass its path explicitly:
+
+```bash
+python server.py --host 127.0.0.1 --port 8765 --db /absolute/path/to/mnemosyne.db
+```
+
+The dashboard remains read-only unless memory admin is explicitly enabled. Its
+configuration and audit state default to `~/.hermes/plugin-data/mnemosyne-dashboard`;
+set `MNEMOSYNE_DASHBOARD_CONFIG` if you want a completely separate location.
 
 ```bash
 python server.py --host 0.0.0.0 --port 8765
