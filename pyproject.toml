@@ -1,11 +1,12 @@
 [project]
 name = "mnemosyne-dashboard"
-version = "0.14.0"
+version = "0.15.0"
 description = "Local-only read-only web dashboard for Mnemosyne memory stores."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Agent Hammy" }]
+maintainers = [{ name = "Jim Beno" }]
 keywords = ["hermes-agent", "mnemosyne", "memory", "dashboard", "sqlite"]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -19,8 +20,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Wysie/mnemosyne-dashboard"
-Issues = "https://github.com/Wysie/mnemosyne-dashboard/issues"
+Homepage = "https://github.com/jbeno/mnemosyne-dashboard"
+Issues = "https://github.com/jbeno/mnemosyne-dashboard/issues"
+Upstream = "https://github.com/wysie/mnemosyne-dashboard"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

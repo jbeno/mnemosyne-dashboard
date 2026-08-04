@@ -99,7 +99,7 @@ def test_release_version_is_consistent():
     project_version = pyproject['project']['version']
     plugin_text = (ROOT / 'plugin.yaml').read_text()
 
-    assert project_version == '0.14.0'
+    assert project_version == '0.15.0'
     assert f'version: "{project_version}"' in plugin_text
     assert Handler.server_version == f'MnemosyneDashboard/{project_version}'
 
@@ -753,8 +753,8 @@ def test_static_ui_exposes_v23_trust_and_lifecycle_controls():
     assert 'Hammy drone' in html
     assert 'Mnemosyne Labyrinth' in html
     assert 'artifact rooms' in html
-    assert '/static/app.js?v=stream-v2' in html
-    assert '/static/style.css?v=stream-v2' in html
+    assert '/static/app.js?v=0.15.0' in html
+    assert '/static/style.css?v=0.15.0' in html
     assert 'id="constellationExitFullscreen"' in html
     assert 'id="threeExitFullscreen"' in html
     assert 'class="fullscreen-exit"' in html
@@ -967,8 +967,8 @@ def test_static_ui_exposes_v23_trust_and_lifecycle_controls():
     assert 'metadata-only SSE' not in html
     assert 'sanitized metadata only' not in html
     assert 'metadata_json is still kept out' not in html
-    assert '/static/app.js?v=stream-v2' in html
-    assert '/static/style.css?v=stream-v2' in html
+    assert '/static/app.js?v=0.15.0' in html
+    assert '/static/style.css?v=0.15.0' in html
     assert 'stateHtml' in js
     assert 'state-empty' in css
     assert '.memory-card.live-new' in css
