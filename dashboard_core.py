@@ -9,9 +9,10 @@ import shutil
 import sqlite3
 import uuid
 from collections import Counter
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 try:
     from mnemosyne.core import PatternDetector
@@ -69,6 +70,14 @@ def default_db_path() -> Path:
     return home / "mnemosyne" / "data" / "mnemosyne.db"
 
 
+def _hermes_root(home: Path) -> Path:
+    """Return the shared Hermes root when running inside an isolated profile."""
+    home = home.expanduser().resolve()
+    if home.parent.name == "profiles":
+        return home.parent.parent
+    return home
+
+
 def _label_for_db(p: Path, home: Path) -> str:
     """Derive a human-friendly label for a Mnemosyne DB path.
 
@@ -82,7 +91,13 @@ def _label_for_db(p: Path, home: Path) -> str:
     except ValueError:
         return p.parent.parent.name or p.stem
     if parts and parts[0] == "profiles" and len(parts) >= 2:
-        return parts[1]
+        profile = parts[1]
+        if "banks" in parts:
+            bank_index = parts.index("banks") + 1
+            if bank_index < len(parts):
+                bank = parts[bank_index]
+                return profile if bank == profile else f"{profile} / {bank}"
+        return profile
     if parts and parts[0] == "mnemosyne":
         return "coordinator"
     return p.parent.parent.name or p.stem
@@ -98,12 +113,14 @@ def discover_databases(active_db: str, configured: list[str] | None = None) -> l
     """
     import glob
 
-    home = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+    configured_home = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+    home = _hermes_root(configured_home)
     candidates: list[str] = []
     if configured:
         candidates.extend(configured)
     auto = [home / "mnemosyne" / "data" / "mnemosyne.db"]
     auto += [Path(p) for p in glob.glob(str(home / "profiles" / "*" / "mnemosyne" / "data" / "mnemosyne.db"))]
+    auto += [Path(p) for p in glob.glob(str(home / "profiles" / "*" / "mnemosyne" / "data" / "banks" / "*" / "mnemosyne.db"))]
     candidates.extend(str(p) for p in auto)
     candidates.append(active_db)
 
