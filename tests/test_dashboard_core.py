@@ -44,6 +44,20 @@ def make_db(path: Path):
         id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, items_consolidated INTEGER,
         summary_preview TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE canonical_facts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, owner_id TEXT NOT NULL, category TEXT NOT NULL,
+        name TEXT NOT NULL, body TEXT NOT NULL, source TEXT, confidence REAL DEFAULT 1.0,
+        version INTEGER NOT NULL DEFAULT 1, valid_from TEXT NOT NULL, valid_until TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE memoria_persona (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT DEFAULT 'default',
+        tier TEXT NOT NULL, topic TEXT NOT NULL, content TEXT NOT NULL,
+        confidence REAL DEFAULT 0.7, source_memory_id TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_reinforced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        reinforcement_count INTEGER DEFAULT 0, promotion_reason TEXT
+    );
     """)
     con.execute("INSERT INTO working_memory(id,content,source,timestamp,session_id,importance,scope) VALUES (?,?,?,?,?,?,?)",
                 ('w1','YC prefers local-only WhatsApp memory','preference','2026-01-01T00:00:00','s1',0.9,'global'))
@@ -65,6 +79,12 @@ def make_db(path: Path):
                 ('YC','knows','Diana','2026-01-01','preference',0.95))
     con.execute("INSERT INTO consolidation_log(session_id,items_consolidated,summary_preview) VALUES (?,?,?)",
                 ('s2',3,'Dashboard work'))
+    con.execute("INSERT INTO canonical_facts(owner_id,category,name,body,source,version,valid_from) VALUES (?,?,?,?,?,?,?)",
+                ('default','identity','user_name','The user name is Jim.','user stated directly',2,'2026-05-01T00:00:00'))
+    con.execute("INSERT INTO canonical_facts(owner_id,category,name,body,source,version,valid_from,valid_until) VALUES (?,?,?,?,?,?,?,?)",
+                ('default','identity','old_name','The old name was James.','migration',1,'2026-04-01T00:00:00','2026-05-01T00:00:00'))
+    con.execute("INSERT INTO memoria_persona(session_id,tier,topic,content,confidence,reinforcement_count,promotion_reason) VALUES (?,?,?,?,?,?,?)",
+                ('s1','permanent','preferences','Jim prefers local-only systems.',0.95,4,'repeated preference'))
     con.execute("UPDATE working_memory SET veracity = 'stated' WHERE id = 'w1'")
     con.execute("UPDATE working_memory SET consolidated_at = '2026-05-05T02:00:00' WHERE id = 'w2'")
     con.execute("UPDATE working_memory SET veracity = 'tool' WHERE id = 'w4'")
@@ -196,6 +216,23 @@ def test_list_memories_searches_both_tiers(tmp_path):
     assert rows[0]['trust_weight'] == 0.7
     assert rows[0]['degradation_weight'] == 0.5
     assert rows[0]['effective_memory_weight'] == 0.35
+
+
+def test_persona_and_canonical_facts_are_queryable_and_searchable(tmp_path):
+    db = tmp_path / 'mnemosyne.db'
+    make_db(db)
+    store = DashboardStore(db)
+
+    persona = store.persona_facts(tier='permanent', q='local-only')
+    assert [row['topic'] for row in persona] == ['preferences']
+    assert store.persona_stats()['total'] == 1
+
+    canonical = store.canonical_facts(owner_id='default', category='identity', q='user stated')
+    assert [row['name'] for row in canonical] == ['user_name']
+    assert store.canonical_stats()['total'] == 1
+
+    search = store.global_search('Jim')
+    assert [row['name'] for row in search['canonical_facts']] == ['user_name']
 
 
 def test_list_memories_filters_v23_veracity_and_degradation(tmp_path):

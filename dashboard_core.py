@@ -1725,12 +1725,13 @@ class DashboardStore:
     def global_search(self, q: str = "", limit: int = 30) -> dict[str, Any]:
         q = (q or "").strip()
         if not q:
-            return {"query": q, "memories": [], "triples": [], "consolidations": []}
+            return {"query": q, "memories": [], "triples": [], "canonical_facts": [], "consolidations": []}
         per_kind = max(1, min(int(limit or 30), 100))
         return {
             "query": q,
             "memories": self.list_memories(kind="all", q=q, sort="recent", limit=per_kind),
             "triples": self.triples(q=q, limit=per_kind),
+            "canonical_facts": self.canonical_facts(q=q, limit=per_kind),
             "consolidations": self.consolidations(q=q, limit=per_kind),
         }
 
@@ -1873,7 +1874,7 @@ class DashboardStore:
         q = (q or "").strip()
         tier = (tier or "").strip()
         topic = (topic or "").strip()
-        with self.connect() as con:
+        with self.session() as con:
             tables = self._tables(con)
             if "memoria_persona" not in tables:
                 return []
@@ -1900,7 +1901,7 @@ class DashboardStore:
 
     def persona_stats(self) -> dict[str, Any]:
         """Aggregate counts per persona tier and topic."""
-        with self.connect() as con:
+        with self.session() as con:
             tables = self._tables(con)
             if "memoria_persona" not in tables:
                 return {"total": 0, "by_tier": [], "by_topic": []}
@@ -1920,11 +1921,11 @@ class DashboardStore:
         q = (q or "").strip()
         owner_id = (owner_id or "").strip()
         category = (category or "").strip()
-        with self.connect() as con:
+        with self.session() as con:
             tables = self._tables(con)
             if "canonical_facts" not in tables:
                 return []
-            where = ["valid_until IS NULL"]
+            where = ["(valid_until IS NULL OR valid_until = '')"]
             params: list[Any] = []
             if owner_id:
                 where.append("owner_id = ?")
@@ -1933,8 +1934,8 @@ class DashboardStore:
                 where.append("category = ?")
                 params.append(category)
             if q:
-                where.append("(COALESCE(owner_id,'') LIKE ? OR COALESCE(category,'') LIKE ? OR COALESCE(name,'') LIKE ? OR COALESCE(body,'') LIKE ?)")
-                params.extend([f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%"])
+                where.append("(COALESCE(owner_id,'') LIKE ? OR COALESCE(category,'') LIKE ? OR COALESCE(name,'') LIKE ? OR COALESCE(body,'') LIKE ? OR COALESCE(source,'') LIKE ?)")
+                params.extend([f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%"])
             rows = con.execute(
                 f"SELECT id, owner_id, category, name, body, source, confidence, version, valid_from, created_at "
                 f"FROM canonical_facts WHERE {' AND '.join(where)} "
@@ -1945,15 +1946,16 @@ class DashboardStore:
 
     def canonical_stats(self) -> dict[str, Any]:
         """Aggregate canonical fact counts per owner and category."""
-        with self.connect() as con:
+        with self.session() as con:
             tables = self._tables(con)
             if "canonical_facts" not in tables:
                 return {"total": 0, "by_owner": [], "by_category": []}
-            total = con.execute("SELECT COUNT(*) FROM canonical_facts WHERE valid_until IS NULL").fetchone()[0]
+            active = "valid_until IS NULL OR valid_until = ''"
+            total = con.execute(f"SELECT COUNT(*) FROM canonical_facts WHERE {active}").fetchone()[0]
             by_owner = [dict(r) for r in con.execute(
-                "SELECT owner_id, COUNT(*) AS count FROM canonical_facts WHERE valid_until IS NULL GROUP BY owner_id ORDER BY count DESC"
+                f"SELECT owner_id, COUNT(*) AS count FROM canonical_facts WHERE {active} GROUP BY owner_id ORDER BY count DESC"
             )]
             by_category = [dict(r) for r in con.execute(
-                "SELECT category, COUNT(*) AS count FROM canonical_facts WHERE valid_until IS NULL GROUP BY category ORDER BY count DESC LIMIT 20"
+                f"SELECT category, COUNT(*) AS count FROM canonical_facts WHERE {active} GROUP BY category ORDER BY count DESC LIMIT 20"
             )]
             return {"total": total, "by_owner": by_owner, "by_category": by_category}

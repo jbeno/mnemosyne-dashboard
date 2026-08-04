@@ -1022,6 +1022,7 @@ async function loadConsolidations(){
 
 function searchMemoryCard(m){ return memoryItem(m); }
 function tripleCard(t){ return `<div class="item" data-json='${esc(JSON.stringify(t))}'><div class="meta"><span class="badge">fact</span><span>${esc(t.created_at || t.valid_from || '')}</span></div><div class="content"><strong>${esc(t.subject)}</strong> — ${esc(t.predicate)} → <strong>${esc(t.object)}</strong></div></div>`; }
+function canonicalCard(f){ return `<div class="item" data-json='${esc(JSON.stringify(f))}'><div class="meta"><span class="badge">canonical</span><span class="badge">${esc(f.category || 'uncategorized')}</span><span>${esc(f.owner_id || '')}</span></div><div class="content"><strong>${esc(f.name || '')}</strong> — ${esc(f.body || '')}</div></div>`; }
 function consolidationCard(c){ return `<div class="item" data-json='${esc(JSON.stringify(c))}'><div class="meta"><span class="badge">consolidation</span><span class="badge">${esc(c.items_consolidated)} items</span><span>${esc(c.created_at)}</span></div><div class="content">${esc(c.session_id || '')}: ${esc(c.summary_preview || '')}</div></div>`; }
 function bindJsonCards(root, title){ root.querySelectorAll('[data-json]').forEach(el => el.onclick = () => showDetail(JSON.parse(el.dataset.json), title)); }
 function stateHtml(kind, title, body=''){
@@ -1044,13 +1045,15 @@ async function loadGlobalSearch(){
     const data = await api(`/api/search?q=${encodeURIComponent(q)}&limit=30`);
     const memories = data.memories || [];
     const triples = data.triples || [];
+    const canonical = data.canonical_facts || [];
     const consolidations = data.consolidations || [];
-    const total = memories.length + triples.length + consolidations.length;
+    const total = memories.length + triples.length + canonical.length + consolidations.length;
     $('#globalSearchResults').innerHTML = `
-      <div class="search-summary glass"><h3>Search results for “${esc(q)}”</h3><p>${countLabel(total, 'result')} · ${countLabel(memories.length, 'memory')} · ${countLabel(triples.length, 'fact')} · ${countLabel(consolidations.length, 'consolidation')}</p></div>
+      <div class="search-summary glass"><h3>Search results for “${esc(q)}”</h3><p>${countLabel(total, 'result')} · ${countLabel(memories.length, 'memory')} · ${countLabel(triples.length, 'fact')} · ${countLabel(canonical.length, 'canonical fact')} · ${countLabel(consolidations.length, 'consolidation')}</p></div>
       ${total ? '' : stateHtml('empty', 'No results found.', 'Try broader terms, a person/project name, or search inside Memories for record-only filters.')}
       <div class="result-section"><h3>Memories <span>${memories.length}</span></h3><div class="memory-grid">${memories.map(searchMemoryCard).join('') || stateHtml('empty', 'No memory records matched.')}</div></div>
       <div class="result-section"><h3>Facts <span>${triples.length}</span></h3><div class="memory-grid">${triples.map(tripleCard).join('') || stateHtml('empty', 'No graph facts matched.')}</div></div>
+      <div class="result-section"><h3>Canonical Facts <span>${canonical.length}</span></h3><div class="memory-grid">${canonical.map(canonicalCard).join('') || stateHtml('empty', 'No canonical facts matched.')}</div></div>
       <div class="result-section"><h3>Consolidations <span>${consolidations.length}</span></h3><div class="memory-grid">${consolidations.map(consolidationCard).join('') || stateHtml('empty', 'No consolidation summaries matched.')}</div></div>`;
     bindMemoryClicks($('#globalSearchResults'));
     bindJsonCards($('#globalSearchResults'), 'Search result detail');
