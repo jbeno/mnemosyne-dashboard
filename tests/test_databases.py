@@ -56,6 +56,22 @@ def test_discover_auto_finds_profiles(tmp_path, monkeypatch):
     assert by_path[str(dev.resolve())]["label"] == "developer"
 
 
+def test_discover_finds_bank_layout_and_profile_scoped_home(tmp_path, monkeypatch):
+    home = tmp_path / "hermes"
+    profile_home = home / "profiles" / "developer"
+    monkeypatch.setenv("HERMES_HOME", str(profile_home))
+    direct = _touch_db(profile_home / "mnemosyne" / "data" / "mnemosyne.db")
+    own_bank = _touch_db(profile_home / "mnemosyne" / "data" / "banks" / "developer" / "mnemosyne.db")
+    other_bank = _touch_db(profile_home / "mnemosyne" / "data" / "banks" / "research" / "mnemosyne.db")
+
+    out = dc.discover_databases(active_db=str(direct))
+    by_path = {d["path"]: d for d in out}
+
+    assert by_path[str(direct.resolve())]["label"] == "developer"
+    assert by_path[str(own_bank.resolve())]["label"] == "developer"
+    assert by_path[str(other_bank.resolve())]["label"] == "developer / research"
+
+
 def test_label_for_db_profile_and_coordinator(tmp_path):
     home = tmp_path / "hermes"
     coordinator = home / "mnemosyne" / "data" / "mnemosyne.db"

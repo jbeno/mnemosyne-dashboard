@@ -83,6 +83,65 @@ def test_release_version_is_consistent():
     assert Handler.server_version == f'MnemosyneDashboard/{project_version}'
 
 
+def test_store_session_commits_and_closes_connection(tmp_path, monkeypatch):
+    store = DashboardStore(tmp_path / 'unused.db')
+
+    class FakeConnection:
+        committed = False
+        rolled_back = False
+        closed = False
+
+        def commit(self):
+            self.committed = True
+
+        def rollback(self):
+            self.rolled_back = True
+
+        def close(self):
+            self.closed = True
+
+    con = FakeConnection()
+    monkeypatch.setattr(store, 'connect', lambda: con)
+
+    with store.session() as yielded:
+        assert yielded is con
+
+    assert con.committed is True
+    assert con.rolled_back is False
+    assert con.closed is True
+
+
+def test_store_session_rolls_back_and_closes_on_error(tmp_path, monkeypatch):
+    store = DashboardStore(tmp_path / 'unused.db')
+
+    class FakeConnection:
+        committed = False
+        rolled_back = False
+        closed = False
+
+        def commit(self):
+            self.committed = True
+
+        def rollback(self):
+            self.rolled_back = True
+
+        def close(self):
+            self.closed = True
+
+    con = FakeConnection()
+    monkeypatch.setattr(store, 'connect', lambda: con)
+
+    try:
+        with store.session():
+            raise RuntimeError('boom')
+    except RuntimeError:
+        pass
+
+    assert con.committed is False
+    assert con.rolled_back is True
+    assert con.closed is True
+
+
 def test_stats_counts_memory_tables(tmp_path):
     db = tmp_path / 'mnemosyne.db'
     make_db(db)
