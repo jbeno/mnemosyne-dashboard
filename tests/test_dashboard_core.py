@@ -753,8 +753,9 @@ def test_static_ui_exposes_v23_trust_and_lifecycle_controls():
     assert 'Hammy drone' in html
     assert 'Mnemosyne Labyrinth' in html
     assert 'artifact rooms' in html
-    assert '/static/app.js?v=0.15.0-ui3' in html
+    assert '/static/app.js?v=0.15.0-ui4' in html
     assert '/static/style.css?v=0.15.0-ui3' in html
+    assert '/static/ui-system.css?v=0.15.0-night1' in html
     assert 'id="mobileDbSelector"' in html
     assert 'class="brand-avatar"' in html
     assert 'id="about"' in html
@@ -763,6 +764,10 @@ def test_static_ui_exposes_v23_trust_and_lifecycle_controls():
     assert "if(section==='about') loadAbout()" in js
     assert "$$('#dbSelector, #mobileDbSelector')" in js
     assert 'nav{grid-template-columns:1fr!important}' in css
+    ui_css = (ROOT / 'static' / 'ui-system.css').read_text()
+    assert '--ui-gold:#d6aa62' in ui_css
+    assert '#liveMemoryStream .item' in ui_css
+    assert '@media(prefers-reduced-motion:reduce)' in ui_css
     assert 'id="constellationExitFullscreen"' in html
     assert 'id="threeExitFullscreen"' in html
     assert 'class="fullscreen-exit"' in html
@@ -975,7 +980,7 @@ def test_static_ui_exposes_v23_trust_and_lifecycle_controls():
     assert 'metadata-only SSE' not in html
     assert 'sanitized metadata only' not in html
     assert 'metadata_json is still kept out' not in html
-    assert '/static/app.js?v=0.15.0-ui3' in html
+    assert '/static/app.js?v=0.15.0-ui4' in html
     assert '/static/style.css?v=0.15.0-ui3' in html
     assert 'stateHtml' in js
     assert 'state-empty' in css
