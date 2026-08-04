@@ -4,6 +4,11 @@ A local-first web dashboard for browsing, visualising, and safely maintaining a 
 
 It is intentionally small: Python standard library server, static HTML/CSS/JS frontend, no external JS runtime, no cloud calls, and read-only browsing by default. Optional password-gated maintenance mode supports safe Mnemosyne-style memory supersession/expiry without hard deletes or raw overwrite edits.
 
+The visual layer is a source-owned component system inspired by shadcn/ui's
+open-code model, adapted for a dependency-free static frontend. Its celestial
+dark theme, semantic tokens, component rules, and contribution guidance are
+documented in [docs/design-system.md](docs/design-system.md).
+
 ## Maintained fork
 
 This is the `jbeno/mnemosyne-dashboard` maintained fork of the original
@@ -128,13 +133,13 @@ The generator creates a temporary mock SQLite database, starts the dashboard on 
 - Optional password authentication, configurable from the Settings tab
 - Password-gated memory maintenance mode with supersede, expire/invalidate, and importance update actions
 - Automatic SQLite backups and JSONL audit log for admin memory mutations
-- Switch between multiple Mnemosyne databases (for example per-profile brains) from the Overview page without restarting the server
+- Switch between multiple Mnemosyne databases (for example per-profile brains) from the global desktop or mobile selector without restarting the server
 - Editable Settings fields for bind address, port, and Mnemosyne database path
 - Database diagnostics for install health: path, readability, file size, modified time, tables, row counts, and copyable diagnostics
 - Unified session detail drawer from top sessions, consolidation entries, and timeline session chips
 - Desktop and mobile responsive layouts
 - Dark and light themes
-- Mnemosyne-inspired light theme with self-hosted fonts/assets
+- Celestial dark theme and restrained light theme with local portrait assets and no external UI runtime
 - `/api/health` endpoint for smoke checks and uptime probes
 - Baseline browser security headers and hardened static asset serving
 

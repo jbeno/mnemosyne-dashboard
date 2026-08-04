@@ -11,6 +11,7 @@
 - Add Persona and Canonical Facts views, filters, aggregate counts, and canonical-fact global search.
 - Keep responsive navigation in one column, replace the misaligned lettermark with a centered geometric mark, and remove redundant shell-level containers.
 - Add a Mnemosyne portrait identity across the application icon, navigation, login, favicon, and a new About screen with live version and database details.
+- Replace the rounded legacy presentation with a documented, source-owned UI system: celestial dark tokens, compact controls, flat navigation, grouped metrics, quieter memory rows, and consistent accessible states.
 - Document standalone use without Hermes and the maintained-fork workflow.
 
 ## 0.14.0

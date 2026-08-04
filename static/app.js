@@ -481,7 +481,8 @@ function switchTab(name, opts={}){
 
 function loadAbout(){
   const version = authState.version || APP_VERSION;
-  const engineVersion = realtimeState.status?.mnemosyne_version || 'unknown';
+  const detectedEngineVersion = realtimeState.status?.mnemosyne_version || '';
+  const engineVersion = detectedEngineVersion && detectedEngineVersion !== 'unknown' ? detectedEngineVersion : 'Not detected in this runtime';
   const activeDatabase = $('#dbSelector')?.selectedOptions?.[0]?.textContent || $('#mobileDbSelector')?.selectedOptions?.[0]?.textContent || 'Configured database';
   if($('#aboutDashboardVersion')) $('#aboutDashboardVersion').textContent = `v${version}`;
   if($('#aboutDashboardBuild')) $('#aboutDashboardBuild').textContent = `Mnemosyne Dashboard ${version}`;
