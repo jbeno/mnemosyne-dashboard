@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Search } from "lucide-react"
+import { Box, Map as MapIcon, Search } from "lucide-react"
 
 import { KeyValueList } from "@/components/key-value-list"
 import { MetricStrip } from "@/components/metric-strip"
 import { NetworkMap } from "@/components/network-map"
 import { PageHeader } from "@/components/page-header"
+import { ThreeNetworkMap } from "@/components/three-network-map"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,9 +13,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { dashboardApi } from "@/lib/api"
 import type { GraphData, GraphNode, Triple } from "@/lib/types"
-import { formatDate } from "@/lib/utils"
+import { cn, formatDate } from "@/lib/utils"
 
 export function KnowledgeGraphPage({ databaseKey }: { databaseKey: string }) {
+  const [dimension, setDimension] = useState<"2d" | "3d">("2d")
   const [query, setQuery] = useState("")
   const [graph, setGraph] = useState<GraphData>({ nodes: [], edges: [] })
   const [triples, setTriples] = useState<Triple[]>([])
@@ -64,11 +66,15 @@ export function KnowledgeGraphPage({ databaseKey }: { databaseKey: string }) {
       <Tabs defaultValue="map">
         <TabsList aria-label="Knowledge graph view"><TabsTrigger value="map">Relationship map</TabsTrigger><TabsTrigger value="facts">Facts table</TabsTrigger></TabsList>
         <TabsContent className="pt-6" value="map">
+          <div className="mb-4 flex items-center justify-end gap-2">
+            <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">View</span>
+            <Tabs onValueChange={(value) => setDimension(value as typeof dimension)} value={dimension}>
+              <TabsList aria-label="Knowledge graph dimension" variant="default"><TabsTrigger value="2d"><MapIcon />2D</TabsTrigger><TabsTrigger value="3d"><Box />3D</TabsTrigger></TabsList>
+            </Tabs>
+          </div>
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
-            <NetworkMap edges={graph.edges} emptyMessage="No structured knowledge relationships match this filter. Mnemosyne populates this map from temporal triples, episodic graph facts, and MEMORIA relationships." nodes={graph.nodes} onSelect={setSelected} selectedId={selected?.id} />
-            <aside className="border-t pt-5 xl:border-l xl:border-t-0 xl:pl-6" aria-live="polite">
-              {selected ? <><p className="eyebrow">Selected node</p><h2 className="mt-2 text-xl font-semibold">{selected.label}</h2><KeyValueList className="mt-4" rows={[{ label: "Connections", value: connected.length.toLocaleString() }, { label: "Occurrences", value: Number(selected.count || 0).toLocaleString() }]} /><div className="mt-5 divide-y">{connected.slice(0,10).map((edge) => <div className="py-3" key={edge.id}><div className="flex flex-wrap gap-1.5"><Badge variant="outline">{edge.predicate || edge.label || "related"}</Badge>{edge.knowledge_store ? <Badge variant="secondary">{edge.knowledge_store}</Badge> : null}</div><p className="mt-2 text-sm leading-5 text-muted-foreground">{edge.subject} → {edge.object}</p></div>)}</div></> : <><p className="eyebrow">Graph inspector</p><h2 className="mt-2 text-xl font-semibold">Nothing selected</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">Select a node to inspect its connected relationships and source store.</p></>}
-            </aside>
+            {dimension === "3d" ? <ThreeNetworkMap edges={graph.edges} fullscreenPanel={<KnowledgeInspector connected={connected} selected={selected} />} mode="graph" nodes={graph.nodes} onSelect={setSelected} selectedId={selected?.id} showEdgeLabels /> : <NetworkMap edges={graph.edges} emptyMessage="No structured knowledge relationships match this filter. Mnemosyne populates this map from temporal triples, episodic graph facts, and MEMORIA relationships." fullscreenPanel={<KnowledgeInspector connected={connected} selected={selected} />} mode="graph" nodes={graph.nodes} onSelect={setSelected} selectedId={selected?.id} showEdgeLabels />}
+            <KnowledgeInspector className="border-t pt-5 xl:border-l xl:border-t-0 xl:pl-6" connected={connected} selected={selected} />
           </div>
         </TabsContent>
         <TabsContent className="pt-6" value="facts">
@@ -81,4 +87,10 @@ export function KnowledgeGraphPage({ databaseKey }: { databaseKey: string }) {
       </Tabs>
     </div>
   )
+}
+
+function KnowledgeInspector({ className, connected, selected }: { className?: string; connected: GraphData["edges"]; selected: GraphNode | null }) {
+  return <aside className={cn(className)} aria-live="polite">
+    {selected ? <><p className="eyebrow">Selected node</p><h2 className="mt-2 break-words text-xl font-semibold">{selected.label}</h2><div className="mt-3 flex flex-wrap gap-1.5"><Badge variant="outline">{selected.kind || "entity"}</Badge>{selected.category ? <Badge variant="secondary">{selected.category}</Badge> : null}</div><KeyValueList className="mt-4" rows={[{ label: "Connections", value: connected.length.toLocaleString() }, { label: "Occurrences", value: Number(selected.count || 0).toLocaleString() }]} /><div className="mt-5 divide-y">{connected.slice(0,10).map((edge) => <div className="py-3" key={edge.id}><div className="flex flex-wrap gap-1.5"><Badge variant="outline">{edge.predicate || edge.label || "related"}</Badge>{edge.knowledge_store ? <Badge variant="secondary">{edge.knowledge_store}</Badge> : null}</div><p className="mt-2 break-words text-sm leading-5 text-muted-foreground">{edge.subject} → {edge.object}</p></div>)}</div></> : <><p className="eyebrow">Graph inspector</p><h2 className="mt-2 text-xl font-semibold">Nothing selected</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">Select a node to inspect its connected relationships and source store.</p></>}
+  </aside>
 }

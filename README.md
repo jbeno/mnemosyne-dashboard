@@ -24,9 +24,12 @@ History, Context Bank, Knowledge Graph, MEMORIA, Persona & Facts, Visualizer,
 Settings, and About pages. Data-heavy routes are split into lazy-loaded bundles
 so the charting and exploration tools do not inflate every navigation path.
 The Visualizer includes stable 2D and rotating 3D Constellation/Neural views,
-fullscreen controls, and node inspection without fetching browser assets from a
-CDN. The Knowledge Graph normalizes temporal triples, episodic graph facts, and
-MEMORIA relationships while retaining their source-store provenance.
+label controls, fullscreen presentation, and node inspection without fetching
+browser assets from a CDN. The Knowledge Graph normalizes temporal triples,
+episodic graph facts, and MEMORIA relationships while retaining their
+source-store provenance. Its flat 2D and volumetric 3D maps group connected data,
+expose predicates, keep the selected neighborhood labeled and highlighted, and
+retain the complete inspector as an overlay in fullscreen mode.
 
 Build the checked-in candidate assets with Bun:
 
@@ -135,7 +138,7 @@ The generator creates a temporary mock SQLite database, starts the dashboard on 
 - Read-only Memory Intelligence views:
   - Today — daily digest of memories added/recalled, structured relations, consolidations, entities, sources, and sessions
   - Context Bank — inferred context sections derived from active memories and structured relations without writing back
-  - Visualiser — selectable Constellation and Neural Map views with stable 2D and rotating 3D renderers, fullscreen controls, and click-through read-only inspectors
+  - Visualiser — selectable Constellation and Neural Map views with stable 2D and rotating 3D renderers, ambient-label controls, fullscreen presentation, and click-through read-only inspectors
 - Nine-section product navigation instead of raw database tabs:
   - Overview — counts, breakdowns, quick actions, and recent memories
   - Today — read-only daily memory digest
@@ -156,7 +159,7 @@ The generator creates a temporary mock SQLite database, starts the dashboard on 
   - Mini timeline grouped by day or session
   - Consolidation history with filtering, JSON inspection, and jump-to-session memories
 - Graph section:
-  - Interactive relationship graph across temporal triples, episodic facts, and MEMORIA relationships with query filtering, mouse-wheel zoom, drag-to-pan, fullscreen, and reset view
+  - Interactive 2D/3D relationship graph across temporal triples, episodic facts, and MEMORIA relationships with query filtering, ambient-label controls, persistent selected-neighborhood predicates, connection highlighting, hover summaries, orbit/pan/zoom, fullscreen inspector overlays, and reset view
   - Clickable nodes and edges
   - Inspector panel with relation-store provenance
   - Structured-facts table with temporal, episodic, and MEMORIA source badges

@@ -169,10 +169,35 @@ function layoutNeural(nodes: GraphNode[], edges: GraphEdge[], degree: Map<string
 
 function layoutGraph(nodes: GraphNode[], edges: GraphEdge[], degree: Map<string, number>): SpatialNode[] {
   const ordered = [...nodes].sort((a, b) => score(b, degree) - score(a, degree))
-  const positions = new Map(ordered.map((node, index) => {
-    const angle = index * 2.399963
-    const distance = 22 + Math.sqrt(index) * 30
-    return [node.id, { x: Math.cos(angle) * distance, y: Math.sin(angle) * distance * 0.72 }]
+  const components = connectedComponents(ordered, edges)
+  const clusterKeys = [...new Set(ordered.map((node) => `${components.get(node.id) || 0}:${node.category || "Knowledge"}`))]
+  const clusterIndex = new Map(clusterKeys.map((key, index) => [key, index]))
+  const clusterCenters = new Map(clusterKeys.map((key, index) => {
+    if (clusterKeys.length === 1) return [key, { x: 0, y: 0, z: 0 }]
+    const latitude = Math.acos(1 - 2 * ((index + 0.5) / clusterKeys.length))
+    const longitude = index * 2.399963
+    const radius = 122 + Math.floor(index / 12) * 44
+    return [key, {
+      x: Math.cos(longitude) * Math.sin(latitude) * radius,
+      y: Math.cos(latitude) * radius * 0.78,
+      z: Math.sin(longitude) * Math.sin(latitude) * radius,
+    }]
+  }))
+  const rankByCluster = new Map<string, number>()
+  const positions = new Map(ordered.map((node) => {
+    const key = `${components.get(node.id) || 0}:${node.category || "Knowledge"}`
+    const center = clusterCenters.get(key) || { x: 0, y: 0, z: 0 }
+    const rank = rankByCluster.get(key) || 0
+    rankByCluster.set(key, rank + 1)
+    const angle = rank * 2.399963 + (clusterIndex.get(key) || 0) * 0.31
+    const distance = 12 + Math.sqrt(rank) * 24
+    const vertical = ((((rank * 47) + (clusterIndex.get(key) || 0) * 13) % 101) + 0.5) / 101 * 2 - 1
+    const radial = Math.sqrt(Math.max(0, 1 - vertical * vertical))
+    return [node.id, {
+      x: center.x + Math.cos(angle) * radial * distance,
+      y: center.y + vertical * distance * 0.78,
+      z: center.z + Math.sin(angle) * radial * distance,
+    }]
   }))
   const visible = edges.filter((edge) => positions.has(edge.source) && positions.has(edge.target)).slice(0, 320)
 
@@ -209,12 +234,16 @@ function layoutGraph(nodes: GraphNode[], edges: GraphEdge[], degree: Map<string,
     for (const node of ordered) {
       const position = positions.get(node.id)!
       const delta = force.get(node.id)!
-      position.x = clamp(position.x * 0.994 + delta.x * cooling, -405, 405)
-      position.y = clamp(position.y * 0.994 + delta.y * cooling, -245, 245)
+      const key = `${components.get(node.id) || 0}:${node.category || "Knowledge"}`
+      const center = clusterCenters.get(key) || { x: 0, y: 0, z: 0 }
+      delta.x += (center.x - position.x) * 0.004
+      delta.y += (center.y - position.y) * 0.004
+      position.x = clamp(position.x * 0.996 + delta.x * cooling, -405, 405)
+      position.y = clamp(position.y * 0.996 + delta.y * cooling, -245, 245)
     }
   }
 
-  return ordered.map((node, index) => {
+  return ordered.map((node) => {
     const position = positions.get(node.id)!
     const nodeDegree = degree.get(node.id) || 0
     const weight = Math.max(1, Number(node.count || node.weight || 1))
@@ -224,9 +253,29 @@ function layoutGraph(nodes: GraphNode[], edges: GraphEdge[], degree: Map<string,
       radius: Math.min(14, 4 + Math.sqrt(weight + nodeDegree) * 1.8),
       x: position.x,
       y: position.y,
-      z: ((index * 47) % 101) - 50,
+      z: position.z,
     }
   })
+}
+
+function connectedComponents(nodes: GraphNode[], edges: GraphEdge[]) {
+  const parent = new Map(nodes.map((node) => [node.id, node.id]))
+  const find = (id: string): string => {
+    const current = parent.get(id) || id
+    if (current === id) return id
+    const root = find(current)
+    parent.set(id, root)
+    return root
+  }
+  const join = (left: string, right: string) => {
+    const leftRoot = find(left)
+    const rightRoot = find(right)
+    if (leftRoot !== rightRoot) parent.set(rightRoot, leftRoot)
+  }
+  for (const edge of edges) if (parent.has(edge.source) && parent.has(edge.target)) join(edge.source, edge.target)
+  const roots = [...new Set(nodes.map((node) => find(node.id)))]
+  const rootIndex = new Map(roots.map((root, index) => [root, index]))
+  return new Map(nodes.map((node) => [node.id, rootIndex.get(find(node.id)) || 0]))
 }
 
 function score(node: GraphNode, degree: Map<string, number>) {

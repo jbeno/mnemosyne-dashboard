@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { dashboardApi } from "@/lib/api"
 import type { ConstellationData, GraphNode } from "@/lib/types"
-import { formatDate } from "@/lib/utils"
+import { cn, formatDate } from "@/lib/utils"
 
 export function VisualizerPage({ databaseKey }: { databaseKey: string }) {
   const [dimension, setDimension] = useState<"2d" | "3d">("2d")
@@ -61,8 +61,8 @@ export function VisualizerPage({ databaseKey }: { databaseKey: string }) {
           </Tabs>
         </div>
         <div className="grid gap-6 pt-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
-          {dimension === "3d" ? <ThreeNetworkMap edges={data.edges} mode={mode} nodes={data.nodes} onSelect={setSelected} selectedId={selected?.id} /> : <NetworkMap edges={data.edges} mode={mode} nodes={data.nodes} onSelect={setSelected} selectedId={selected?.id} />}
-          <NodeInspector connected={connected.length} node={selected} />
+          {dimension === "3d" ? <ThreeNetworkMap edges={data.edges} fullscreenPanel={<NodeInspector connected={connected.length} node={selected} />} mode={mode} nodes={data.nodes} onSelect={setSelected} selectedId={selected?.id} showEdgeLabels /> : <NetworkMap edges={data.edges} fullscreenPanel={<NodeInspector connected={connected.length} node={selected} />} mode={mode} nodes={data.nodes} onSelect={setSelected} selectedId={selected?.id} showEdgeLabels />}
+          <NodeInspector className="border-t pt-5 xl:border-l xl:border-t-0 xl:pl-6" connected={connected.length} node={selected} />
         </div>
       </div>
 
@@ -73,6 +73,6 @@ export function VisualizerPage({ databaseKey }: { databaseKey: string }) {
   )
 }
 
-function NodeInspector({ connected, node }: { connected: number; node: GraphNode | null }) {
-  return <aside className="border-t pt-5 xl:border-l xl:border-t-0 xl:pl-6" aria-live="polite">{node ? <><p className="eyebrow">Selected node</p><h2 className="mt-2 text-xl font-semibold">{node.label}</h2><div className="mt-3 flex flex-wrap gap-1.5"><Badge variant="outline">{node.kind || "entity"}</Badge>{node.category ? <Badge variant="secondary">{node.category}</Badge> : null}</div>{node.preview ? <p className="mt-4 text-sm leading-6 text-muted-foreground">{node.preview}</p> : null}<KeyValueList className="mt-4" rows={[{ label: "Connections", value: connected.toLocaleString() }, { label: "Occurrences", value: Number(node.count || 0).toLocaleString() }, { label: "Weight", value: Number(node.weight || 0).toFixed(2) }, { label: "Last seen", value: formatDate(node.last_seen) }]} /></> : <><p className="eyebrow">Node inspector</p><h2 className="mt-2 text-xl font-semibold">Explore the map</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">Select a node to see its type, category, relationship count, and source preview.</p></>}</aside>
+function NodeInspector({ className, connected, node }: { className?: string; connected: number; node: GraphNode | null }) {
+  return <aside className={cn(className)} aria-live="polite">{node ? <><p className="eyebrow">Selected node</p><h2 className="mt-2 break-words text-xl font-semibold">{node.label}</h2><div className="mt-3 flex flex-wrap gap-1.5"><Badge variant="outline">{node.kind || "entity"}</Badge>{node.category ? <Badge variant="secondary">{node.category}</Badge> : null}</div>{node.preview ? <p className="mt-4 break-words text-sm leading-6 text-muted-foreground">{node.preview}</p> : null}<KeyValueList className="mt-4" rows={[{ label: "Connections", value: connected.toLocaleString() }, { label: "Occurrences", value: Number(node.count || 0).toLocaleString() }, { label: "Weight", value: Number(node.weight || 0).toFixed(2) }, { label: "Last seen", value: formatDate(node.last_seen) }]} /></> : <><p className="eyebrow">Node inspector</p><h2 className="mt-2 text-xl font-semibold">Explore the map</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">Select a node to see its type, category, relationship count, and source preview.</p></>}</aside>
 }
