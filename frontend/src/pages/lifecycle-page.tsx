@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react"
 
+import { ChartPanel } from "@/components/chart-panel"
+import { CategoryBarChart } from "@/components/dashboard-charts"
 import { MemoryList } from "@/components/memory-list"
 import { MetricStrip } from "@/components/metric-strip"
 import { PageHeader } from "@/components/page-header"
@@ -31,12 +33,23 @@ export function LifecyclePage({ databaseKey }: { databaseKey: string }) {
         eyebrow="Memory"
         title="Lifecycle"
       />
-      <MetricStrip metrics={(data?.cards || []).map((card) => ({ label: card.title, value: card.count }))} />
-      <section className="grid gap-4 border-y py-5 text-sm sm:grid-cols-2 lg:grid-cols-4" aria-label="Lifecycle policy">
-        <PolicyValue label="Warm threshold" value={thresholds ? `${thresholds.tier2_days} days` : "—"} />
-        <PolicyValue label="Cold threshold" value={thresholds ? `${thresholds.tier3_days} days` : "—"} />
-        <PolicyValue label="Tier weights" value={thresholds ? `Hot ×${Number(thresholds.weights['1'] || 1).toFixed(2)} · Warm ×${Number(thresholds.weights['2'] || 0.5).toFixed(2)} · Cold ×${Number(thresholds.weights['3'] || 0.25).toFixed(2)}` : "—"} />
-        <PolicyValue label="Operation" value="Read-only inspection" />
+      <MetricStrip metrics={(data?.cards || []).map((card) => ({ description: card.description, label: card.title, value: card.count }))} />
+      <div className="grid gap-x-10 gap-y-12 xl:grid-cols-2">
+        <ChartPanel className="border-t-0 pt-0" description="Current episodic memories retained at each lifecycle weight." help="Hot, warm, and cold are normal retention tiers, not health states." title="Tier distribution">
+          <CategoryBarChart data={(data?.cards || []).filter((card) => ["hot", "warm", "cold"].includes(card.key)).map((card) => ({ description: card.description, label: card.title.replace(" memories", ""), value: card.count }))} label="Memories" />
+        </ChartPanel>
+        <ChartPanel className="border-t-0 pt-0" description="Queues that may warrant lifecycle review or maintenance." help="Due transitions are actionable maintenance signals. Recently degraded and high-importance degraded are inspection views, not errors." title="Lifecycle attention">
+          <CategoryBarChart data={(data?.cards || []).filter((card) => !["hot", "warm", "cold"].includes(card.key)).map((card) => ({ description: card.description, label: card.title, value: card.count }))} label="Memories" />
+        </ChartPanel>
+      </div>
+      <section aria-labelledby="lifecycle-policy">
+        <h2 className="text-lg font-semibold" id="lifecycle-policy">Lifecycle policy</h2>
+        <div className="mt-4 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <PolicyValue label="Warm threshold" value={thresholds ? `${thresholds.tier2_days} days` : "—"} />
+          <PolicyValue label="Cold threshold" value={thresholds ? `${thresholds.tier3_days} days` : "—"} />
+          <PolicyValue label="Tier weights" value={thresholds ? `Hot ×${Number(thresholds.weights['1'] || 1).toFixed(2)} · Warm ×${Number(thresholds.weights['2'] || 0.5).toFixed(2)} · Cold ×${Number(thresholds.weights['3'] || 0.25).toFixed(2)}` : "—"} />
+          <PolicyValue label="Operation" value="Read-only inspection" />
+        </div>
       </section>
       {error ? <p className="border-l-2 border-destructive px-4 py-2 text-sm" role="alert">{error}</p> : null}
       <Tabs onValueChange={setActiveQueue} value={activeQueue}>

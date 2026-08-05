@@ -173,6 +173,19 @@ def test_stats_counts_memory_tables(tmp_path):
     assert stats['counts']['consolidation_log'] == 1
 
 
+def test_activity_series_aggregates_and_fills_daily_buckets(tmp_path):
+    db = tmp_path / 'mnemosyne.db'
+    make_db(db)
+    activity = DashboardStore(db).activity_series(days=365)
+    points = {point['date']: point for point in activity['series']}
+
+    assert len(activity['series']) == 365
+    assert points['2026-05-04']['memories'] == 2
+    assert points['2026-01-01']['memories'] == 1
+    assert points['2026-01-01']['triples'] == 3
+    assert points['2026-01-01']['total'] == 4
+
+
 def test_stats_exposes_v23_trust_and_degradation_mix(tmp_path):
     db = tmp_path / 'mnemosyne.db'
     make_db(db)

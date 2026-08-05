@@ -27,6 +27,19 @@ standard-library server and read-only data API remain unchanged.
   toolbars, tables, drawers, and state panels share the same semantic tokens.
 - **Local and accessible:** no CDN assets, visible keyboard focus, semantic
   native controls, readable light mode, and reduced-motion support.
+- **Charts explain relationships:** Overview, Lifecycle, Trust Review, Context
+  Bank, MEMORIA, Persona & Facts, and Visualizer use
+  source-owned wrappers over the exact-pinned Recharts dependency, keep an
+  accessibility layer enabled, and retain visible labels or legends instead of
+  communicating with color alone.
+- **Tabs are tabs:** line tabs have no surrounding trigger border; the active
+  item is indicated by a two-pixel underline and semantic Radix state.
+- **Tables remain semantic:** dense relationship, diagnostic, and fact data use
+  the shared responsive Table primitive instead of hand-aligned divs. Tables
+  scroll within their own region at compact widths rather than widening the page.
+- **Exploration is shared:** Knowledge Graph and Visualizer use one keyboard-
+  addressable SVG network-map composition with consistent selection, zoom, and
+  inspector behavior.
 
 ## Token layers
 
@@ -48,3 +61,9 @@ replaces the old shell.
 5. Do not add one-off colors or radii inside feature markup.
 6. Test dark and light themes at desktop, tablet, and phone widths.
 7. Keep the dashboard functional without a network connection.
+8. Aggregate chart series in the read-only Python API; do not ship raw database
+   rows to the browser merely to calculate a visualization.
+9. Prefer the existing source-owned Badge, Table, Tabs, Tooltip, Select, and
+   chart primitives before introducing a new one. New shadcn-style source is
+   welcome when it solves a repeated interaction and passes the dependency age
+   gate without adding unnecessary runtime surface.

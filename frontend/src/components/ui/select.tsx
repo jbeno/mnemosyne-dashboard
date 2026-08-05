@@ -7,7 +7,12 @@ import { cn } from "@/lib/utils"
 const Select = SelectPrimitive.Root
 const SelectValue = SelectPrimitive.Value
 
-function SelectTrigger({ className, children, ...props }: React.ComponentProps<typeof SelectPrimitive.Trigger>) {
+function SelectTrigger({
+  className,
+  children,
+  hideChevron = false,
+  ...props
+}: React.ComponentProps<typeof SelectPrimitive.Trigger> & { hideChevron?: boolean }) {
   return (
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
@@ -18,7 +23,7 @@ function SelectTrigger({ className, children, ...props }: React.ComponentProps<t
       {...props}
     >
       {children}
-      <SelectPrimitive.Icon asChild><ChevronDown className="size-4 text-muted-foreground" /></SelectPrimitive.Icon>
+      {hideChevron ? null : <SelectPrimitive.Icon asChild><ChevronDown className="size-4 text-muted-foreground" /></SelectPrimitive.Icon>}
     </SelectPrimitive.Trigger>
   )
 }

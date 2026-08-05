@@ -5,14 +5,16 @@ export function PageHeader({
   description,
   eyebrow,
   actions,
+  divided = false,
 }: {
   title: string
   description?: string
   eyebrow?: string
   actions?: ReactNode
+  divided?: boolean
 }) {
   return (
-    <header className="flex flex-col gap-5 border-b pb-7 sm:flex-row sm:items-end sm:justify-between">
+    <header className={`flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between ${divided ? "border-b pb-7" : ""}`}>
       <div className="max-w-3xl">
         {eyebrow ? <p className="eyebrow mb-2">{eyebrow}</p> : null}
         <h1 className="display-title text-4xl leading-[1.05] text-foreground sm:text-5xl">{title}</h1>

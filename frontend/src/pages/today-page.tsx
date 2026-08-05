@@ -41,12 +41,12 @@ function ActivityList({ title, items }: { title: string; items?: Array<Triple | 
 export function TodayPage({ digest, loading }: { digest: TodayDigest | null; loading: boolean }) {
   const counts = digest?.counts
   const metrics = [
-    { label: "Added", value: counts?.memories_added },
-    { label: "Retrieved", value: counts?.memories_recalled },
-    { label: "Non-stated", value: counts?.contaminated_added },
-    { label: "Lifecycle changes", value: counts?.degraded_added },
-    { label: "Facts", value: counts?.triples_added },
-    { label: "Consolidations", value: counts?.consolidations },
+    { description: "Working or episodic memories created since local midnight.", label: "Added", value: counts?.memories_added },
+    { description: "Stored memories recalled by Mnemosyne since local midnight.", label: "Retrieved", value: counts?.memories_recalled },
+    { description: "New memories whose provenance is inferred, imported, tool-generated, or unknown. This is not automatically an error.", label: "Non-stated", value: counts?.contaminated_added },
+    { description: "Episodic memories moved between lifecycle tiers today.", label: "Lifecycle changes", value: counts?.degraded_added },
+    { description: "Structured knowledge triples added today.", label: "Facts", value: counts?.triples_added },
+    { description: "Working-memory consolidation operations completed today.", label: "Consolidations", value: counts?.consolidations },
   ]
 
   return (
@@ -59,7 +59,7 @@ export function TodayPage({ digest, loading }: { digest: TodayDigest | null; loa
       <section aria-label="Today's activity totals" aria-busy={loading}>
         <MetricStrip metrics={metrics} />
       </section>
-      <section className="grid gap-x-8 gap-y-7 border-b pb-8 md:grid-cols-2 xl:grid-cols-5" aria-label="Today's breakdowns">
+      <section className="grid gap-x-8 gap-y-7 md:grid-cols-2 xl:grid-cols-5" aria-label="Today's breakdowns">
         <BreakdownList rows={digest?.breakdowns?.entities} title="Entities" />
         <BreakdownList rows={digest?.breakdowns?.veracity} title="Trust" />
         <BreakdownList rows={digest?.breakdowns?.degradation} title="Lifecycle" />

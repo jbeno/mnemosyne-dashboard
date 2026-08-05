@@ -2,7 +2,7 @@
 
 ## 0.15.0
 
-- Add a parallel React/shadcn-style UI candidate at `/candidate` with a source-owned component layer, grouped navigation, persistent database/theme controls, and migrated Overview, Today, Browse Memories, Trust Review, Lifecycle, History, and About views.
+- Add a complete parallel React/shadcn-style UI candidate at `/candidate` with a source-owned component layer, grouped navigation, persistent database/theme controls, and migrated views for the full dashboard.
 - Pin the candidate dependency graph exactly, enforce a seven-day Bun release-age gate with lifecycle scripts disabled, and add an offline lockfile-to-IOC audit command.
 - Add a global database selector to the desktop rail and compact mobile header so Mnemosyne databases can be switched at runtime without restarting.
 - Discover direct-profile and bank-style Hermes brains automatically, including when `HERMES_HOME` points at an isolated profile; switching stays read-only and limited to the discovered/configured set.
@@ -15,6 +15,11 @@
 - Add a Mnemosyne portrait identity across the application icon, navigation, login, favicon, and a new About screen with live version and database details.
 - Replace the rounded legacy presentation with a documented, source-owned UI system: celestial dark tokens, compact controls, flat navigation, grouped metrics, quieter memory rows, and consistent accessible states.
 - Standardize the candidate on a modern system sans-serif stack with page titles as the primary heading and consistent metadata typography.
+- Add a persistent collapsible navigation rail with group flyouts and direct group routing, responsive global search, a prominent database selector, and compact right-aligned refresh and theme controls.
+- Replace the Overview number wall with four current-state metrics plus accessible Recharts time-series and horizontal-bar views backed by a new read-only daily activity aggregation endpoint and 7/30/90/365-day presets.
+- Remove redundant page-header and filter dividers, correct line tabs to use an underline without trigger boxes, and extend accessible comparison charts to Lifecycle and Trust Review.
+- Finish Context Bank, Knowledge Graph, MEMORIA, Persona & Facts, Visualizer, and Settings with real read-only APIs, accessible tables, filters, charts, network inspection, diagnostics, and responsive tab overflow.
+- Split data-heavy candidate routes into lazy-loaded bundles and add source-owned shadcn-style Badge and responsive Table primitives without adding runtime dependencies.
 - Document standalone use without Hermes and the maintained-fork workflow.
 
 ## 0.14.0

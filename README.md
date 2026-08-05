@@ -8,7 +8,7 @@ password-gated maintenance mode supports safe Mnemosyne-style memory
 supersession/expiry without hard deletes or raw overwrite edits.
 
 The established static HTML/CSS/JS interface remains the default. A parallel
-React UI candidate at `/candidate` is moving pages onto a source-owned component
+React UI candidate at `/candidate` moves every dashboard page onto a source-owned component
 layer inspired by shadcn/ui's open-code model, with Radix interaction semantics
 and a celestial token system. Its component rules and contribution guidance are
 documented in [docs/design-system.md](docs/design-system.md).
@@ -16,10 +16,13 @@ documented in [docs/design-system.md](docs/design-system.md).
 ## UI candidate development
 
 The candidate currently includes the shared application shell, grouped
-navigation, global database and theme controls, responsive mobile drawer, and
-migrated Overview, Today, Browse Memories, Trust Review, Lifecycle, History,
-and About pages. Unmigrated destinations link back to their established
-implementations.
+navigation with a collapsible desktop rail, a prominent database selector,
+compact search/refresh/theme controls, a responsive mobile drawer, preset-driven
+activity and inventory charts, and
+fully migrated Overview, Today, Browse Memories, Trust Review, Lifecycle,
+History, Context Bank, Knowledge Graph, MEMORIA, Persona & Facts, Visualizer,
+Settings, and About pages. Data-heavy routes are split into lazy-loaded bundles
+so the charting and exploration tools do not inflate every navigation path.
 
 Build the checked-in candidate assets with Bun:
 

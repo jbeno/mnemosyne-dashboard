@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react"
 import { Search } from "lucide-react"
 
+import { ChartPanel } from "@/components/chart-panel"
+import { CategoryBarChart } from "@/components/dashboard-charts"
 import { MemoryList } from "@/components/memory-list"
 import { MetricStrip } from "@/components/metric-strip"
 import { PageHeader } from "@/components/page-header"
@@ -62,8 +64,11 @@ export function ReviewPage({ databaseKey }: { databaseKey: string }) {
         eyebrow="Memory"
         title="Trust review"
       />
-      <MetricStrip metrics={(data?.cards || []).map((card) => ({ label: card.title, value: card.count }))} />
-      <form className="grid gap-3 border-b pb-6 lg:grid-cols-[minmax(13rem,1fr)_minmax(16rem,2fr)_minmax(12rem,1fr)_auto]" onSubmit={(event) => { event.preventDefault(); void load(queue, 0, query, minImportance) }}>
+      <MetricStrip metrics={(data?.cards || []).map((card) => ({ description: card.description, label: card.title, value: card.count }))} />
+      <ChartPanel className="border-t-0 pt-0" description="Relative size of each read-only review queue." help="These categories overlap, so their bars should not be added together. Use the queue descriptions and filters to decide whether inspection is worthwhile." title="Queue distribution">
+        <CategoryBarChart data={(data?.cards || []).map((card) => ({ description: card.description, label: card.title, value: card.count }))} label="Memories" />
+      </ChartPanel>
+      <form className="grid gap-3 lg:grid-cols-[minmax(13rem,1fr)_minmax(16rem,2fr)_minmax(12rem,1fr)_auto]" onSubmit={(event) => { event.preventDefault(); void load(queue, 0, query, minImportance) }}>
         <Select onValueChange={changeQueue} value={queue}>
           <SelectTrigger aria-label="Review queue"><SelectValue placeholder="Review queue" /></SelectTrigger>
           <SelectContent>{(data?.cards || []).map((card) => <SelectItem key={card.key} value={card.key}>{card.title} ({card.count})</SelectItem>)}</SelectContent>
