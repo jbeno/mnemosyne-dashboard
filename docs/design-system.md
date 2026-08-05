@@ -20,6 +20,9 @@ standard-library server and read-only data API remain unchanged.
   another decorative container.
 - **Compact geometry:** controls use 7px radii and primary surfaces use 11px
   radii. Pills are reserved for true status tokens.
+- **Functional typography:** use the local system sans-serif stack, make the
+  page title the dominant heading, and reserve compact uppercase text for
+  labels and metadata rather than navigation or body copy.
 - **Source-owned components:** navigation, buttons, fields, grouped metrics,
   toolbars, tables, drawers, and state panels share the same semantic tokens.
 - **Local and accessible:** no CDN assets, visible keyboard focus, semantic

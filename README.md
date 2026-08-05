@@ -17,8 +17,9 @@ documented in [docs/design-system.md](docs/design-system.md).
 
 The candidate currently includes the shared application shell, grouped
 navigation, global database and theme controls, responsive mobile drawer, and
-migrated Overview, Today, and About pages. Unmigrated destinations link back to
-their established implementations.
+migrated Overview, Today, Browse Memories, Trust Review, Lifecycle, History,
+and About pages. Unmigrated destinations link back to their established
+implementations.
 
 Build the checked-in candidate assets with Bun:
 
