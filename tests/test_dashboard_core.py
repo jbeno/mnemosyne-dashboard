@@ -428,6 +428,8 @@ def test_knowledge_graph_reads_current_episodic_and_memoria_stores(tmp_path):
     assert [row['object'] for row in store.triples(q='episodic', limit=10)] == ['episodic graph']
     graph = store.graph(q='MEMORIA', limit=10)
     assert {node['label'] for node in graph['nodes']} == {'Dashboard', 'MEMORIA'}
+    assert {node['category'] for node in graph['nodes']} == {'MEMORIA'}
+    assert {node['kind'] for node in graph['nodes']} == {'entity'}
 
 
 def test_timeline_search_matches_session_id(tmp_path):

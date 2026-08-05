@@ -22,6 +22,8 @@
 - Split data-heavy candidate routes into lazy-loaded bundles and add source-owned shadcn-style Badge and responsive Table primitives without adding runtime dependencies.
 - Restore category-aware spatial layouts for Constellation and Neural Map, add integrated 2D/3D switching, orbit/pan/zoom controls, fullscreen presentation, reduced-motion handling, and click-through node inspection using the repository's vendored Three.js runtime.
 - Read the current episodic `facts` and MEMORIA knowledge stores alongside temporal `triples`, preserving store provenance so modern Mnemosyne databases no longer render an empty Knowledge Graph.
+- Extend the Knowledge Graph with a readable flat 2D force map and volumetric clustered 3D view, ambient-label controls, persistent selected-neighborhood node/predicate labels, highlighted connections, hover summaries, and complete fullscreen inspector overlays across every network map.
+- Restore topology-specific visual language in 3D: blue/gold Constellation stars, teal/coral Neural nodes, and subtle source-aware glow for Knowledge Graph entities.
 - Document standalone use without Hermes and the maintained-fork workflow.
 
 ## 0.14.0

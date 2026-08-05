@@ -1017,6 +1017,7 @@ class DashboardStore:
         triples = self.triples(q=q, limit=limit)
         node_ids: dict[str, str] = {}
         node_counts: dict[str, int] = {}
+        node_stores: dict[str, dict[str, int]] = {}
         nodes: list[dict[str, Any]] = []
         edges: list[dict[str, Any]] = []
 
@@ -1031,6 +1032,10 @@ class DashboardStore:
         for t in triples:
             s = node(str(t["subject"]))
             o = node(str(t["object"]))
+            store = str(t.get("knowledge_store") or "Knowledge")
+            for label in (str(t["subject"]), str(t["object"])):
+                stores = node_stores.setdefault(label, {})
+                stores[store] = stores.get(store, 0) + 1
             edges.append({
                 "id": f"e{t['id']}",
                 "triple_id": t.get("id"),
@@ -1048,6 +1053,9 @@ class DashboardStore:
             })
         for n in nodes:
             n["count"] = node_counts.get(n["label"], 0)
+            stores = node_stores.get(n["label"], {})
+            n["category"] = max(stores, key=stores.get) if stores else "Knowledge"
+            n["kind"] = "entity"
         return {"nodes": nodes, "edges": edges}
 
     def consolidations(self, q: str = "", limit: int = 100) -> list[dict[str, Any]]:
