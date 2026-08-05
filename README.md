@@ -2,12 +2,36 @@
 
 A local-first web dashboard for browsing, visualising, and safely maintaining a Mnemosyne memory store, with optional Hermes Agent plugin integration.
 
-It is intentionally small: Python standard library server, static HTML/CSS/JS frontend, no external JS runtime, no cloud calls, and read-only browsing by default. Optional password-gated maintenance mode supports safe Mnemosyne-style memory supersession/expiry without hard deletes or raw overwrite edits.
+It is intentionally local-first: the Python standard-library server makes no
+cloud calls and keeps memory browsing read-only by default. Optional
+password-gated maintenance mode supports safe Mnemosyne-style memory
+supersession/expiry without hard deletes or raw overwrite edits.
 
-The visual layer is a source-owned component system inspired by shadcn/ui's
-open-code model, adapted for a dependency-free static frontend. Its celestial
-dark theme, semantic tokens, component rules, and contribution guidance are
+The established static HTML/CSS/JS interface remains the default. A parallel
+React UI candidate at `/candidate` is moving pages onto a source-owned component
+layer inspired by shadcn/ui's open-code model, with Radix interaction semantics
+and a celestial token system. Its component rules and contribution guidance are
 documented in [docs/design-system.md](docs/design-system.md).
+
+## UI candidate development
+
+The candidate currently includes the shared application shell, grouped
+navigation, global database and theme controls, responsive mobile drawer, and
+migrated Overview, Today, and About pages. Unmigrated destinations link back to
+their established implementations.
+
+Build the checked-in candidate assets with Bun:
+
+```bash
+cd frontend
+bun install --frozen-lockfile --ignore-scripts
+bun run build
+```
+
+Then start the Python server and open `http://127.0.0.1:8765/candidate`. Frontend
+dependencies are exact-pinned, protected by a seven-day release-age gate, and
+installed with lifecycle scripts disabled. See [SECURITY.md](SECURITY.md) for
+the offline IOC audit workflow.
 
 ## Maintained fork
 

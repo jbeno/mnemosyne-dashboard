@@ -99,6 +99,18 @@ def test_favicon_route_serves_icon_without_404(tmp_path, monkeypatch):
         server.close()
 
 
+def test_candidate_dashboard_route_serves_parallel_react_app(tmp_path, monkeypatch):
+    server = ServerHarness(tmp_path, monkeypatch)
+    try:
+        status, headers, body = _request(f"{server.base}/candidate?page=overview")
+        assert status == 200
+        assert headers["Content-Type"].startswith("text/html")
+        assert b'Mnemosyne Dashboard Candidate' in body
+        assert b'/static/candidate/assets/' in body
+    finally:
+        server.close()
+
+
 def test_diagnostics_and_session_endpoints(tmp_path, monkeypatch):
     server = ServerHarness(tmp_path, monkeypatch)
     try:

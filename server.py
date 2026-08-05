@@ -274,7 +274,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _require_auth(self, path: str) -> bool:
         public_paths = {"/api/auth/status", "/api/auth/login"}
-        if path in public_paths or path == "/" or path.startswith("/static/"):
+        if path in public_paths or path in {"/", "/candidate", "/candidate/"} or path.startswith("/static/"):
             return True
         if self._authenticated():
             return True
@@ -296,7 +296,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_HEAD(self):
         parsed = urllib.parse.urlparse(self.path)
-        if parsed.path == "/" or parsed.path == "/favicon.ico" or parsed.path.startswith("/static/") or parsed.path.startswith("/api/"):
+        if parsed.path in {"/", "/candidate", "/candidate/", "/favicon.ico"} or parsed.path.startswith("/static/") or parsed.path.startswith("/api/"):
             self.send_response(200)
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
@@ -311,6 +311,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/":
                 return self._send_file(STATIC / "index.html")
+            if path in {"/candidate", "/candidate/"}:
+                return self._send_file(STATIC / "candidate" / "index.html")
             if path == "/favicon.ico":
                 return self._send_file(STATIC / "mnemosyne-avatar-64.png")
             if path.startswith("/static/"):

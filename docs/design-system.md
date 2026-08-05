@@ -1,15 +1,16 @@
 # Mnemosyne UI system
 
-The dashboard uses a source-owned component layer in
-`static/ui-system.css`. It follows the same open-code principle as shadcn/ui:
-the application owns its visual primitives and can tune them without depending
-on a hosted theme or opaque runtime package.
+The dashboard has two source-owned presentation layers during migration:
 
-A literal shadcn/ui installation would require React, TypeScript, Tailwind,
-Radix primitives, a package manager, and a frontend build pipeline. Mnemosyne
-instead keeps its Python standard-library server and static frontend so the
-dashboard remains local-first, works offline, and introduces no browser calls
-to third-party CDNs.
+- `static/ui-system.css` keeps the established static application coherent.
+- `frontend/src/components/ui/` and `frontend/src/index.css` form the React UI
+  candidate served at `/candidate`.
+
+The candidate follows shadcn/ui's open-code principle: this repository owns the
+visible component source and semantic theme while Radix supplies interaction
+semantics for controls such as tabs, dialogs, and selects. It is a compiled,
+local asset with no third-party browser calls or CDN dependency. The Python
+standard-library server and read-only data API remain unchanged.
 
 ## Principles
 
@@ -26,14 +27,21 @@ to third-party CDNs.
 
 ## Token layers
 
-`--ui-*` variables are the canonical design tokens. Existing `--bg`, `--text`,
-`--line`, and related variables are mapped to them for compatibility with older
-feature-specific styles. New UI work should use `--ui-*` tokens directly.
+`--ui-*` variables remain canonical for the established static interface. The
+candidate uses matching shadcn-style semantic variables such as `--background`,
+`--foreground`, `--card`, `--border`, `--primary`, and `--muted-foreground`.
+Both systems derive from the same night-sky palette until the candidate
+replaces the old shell.
 
 ## Editing rules
 
-1. Put application behavior and feature layout in `static/style.css`.
-2. Put shared visual primitives and theme decisions in `static/ui-system.css`.
-3. Do not add one-off colors or radii inside feature markup.
-4. Test dark and light themes at desktop, tablet, and phone widths.
-5. Keep the dashboard functional without a network connection.
+1. Keep legacy fixes in `static/style.css` and shared legacy primitives in
+   `static/ui-system.css`.
+2. Put candidate primitives in `frontend/src/components/ui/`, compositions in
+   `frontend/src/components/`, and page layouts in `frontend/src/pages/`.
+3. Keep tokens and theme decisions centralized in `frontend/src/index.css`.
+4. Add component source deliberately; do not run a latest-version component
+   generator or bypass the repository's dependency age gate.
+5. Do not add one-off colors or radii inside feature markup.
+6. Test dark and light themes at desktop, tablet, and phone widths.
+7. Keep the dashboard functional without a network connection.
