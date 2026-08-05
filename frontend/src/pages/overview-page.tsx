@@ -25,7 +25,7 @@ export function OverviewPage({
   const inventory: CategoryDatum[] = [
     { description: "Short-term records that have not yet been consolidated into durable memory.", label: "Working", value: working },
     { description: "Durable summaries retained after consolidation.", label: "Episodic", value: stats?.counts.episodic_memory || 0 },
-    { description: "Structured subject-predicate-object relationships in the knowledge store.", label: "Triples", value: stats?.counts.triples || 0 },
+    { description: "Structured subject-predicate-object relationships across temporal triples, episodic facts, and MEMORIA.", label: "Knowledge relations", value: stats?.counts.triples || 0 },
     { description: "Completed consolidation operations recorded by Mnemosyne.", label: "Consolidations", value: stats?.counts.consolidation_log || 0 },
   ]
   const attention: CategoryDatum[] = [
@@ -89,7 +89,7 @@ export function OverviewPage({
       </ChartPanel>
 
       <div className="grid gap-x-10 gap-y-12 xl:grid-cols-2">
-        <ChartPanel description="Current retained records by storage function." help="This is the shape of the memory store. Working memory is short-lived; episodic memory and triples are durable forms produced by consolidation." title="System inventory">
+        <ChartPanel description="Current retained records by storage function." help="This is the shape of the memory store. Working memory is short-lived; episodic memory and structured knowledge relations are durable forms produced by consolidation and extraction." title="System inventory">
           <CategoryBarChart data={inventory} label="Records" />
         </ChartPanel>
         <ChartPanel description="Items surfaced for optional provenance or lifecycle attention." help="These queues are advisory. Due transitions suggest maintenance work; degraded and review counts alone do not mean the memory system is unhealthy." title="Attention queues">

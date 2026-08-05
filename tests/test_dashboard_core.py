@@ -394,6 +394,42 @@ def test_graph_returns_nodes_edges_and_filterable_metadata(tmp_path):
     assert graph['edges'][0]['object'] == 'local-only memory'
 
 
+def test_knowledge_graph_reads_current_episodic_and_memoria_stores(tmp_path):
+    db = tmp_path / 'mnemosyne.db'
+    make_db(db)
+    con = sqlite3.connect(db)
+    con.executescript("""
+    CREATE TABLE facts (
+        fact_id TEXT PRIMARY KEY, session_id TEXT, subject TEXT NOT NULL,
+        predicate TEXT NOT NULL, object TEXT NOT NULL, timestamp TEXT,
+        source_msg_id TEXT, confidence REAL, created_at TEXT
+    );
+    CREATE TABLE memoria_kg (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, subject TEXT,
+        predicate TEXT, object TEXT, message_idx INTEGER, confidence REAL,
+        source_memory_id TEXT
+    );
+    """)
+    con.execute(
+        "INSERT INTO facts VALUES (?,?,?,?,?,?,?,?,?)",
+        ('fact-1', 's1', 'Mnemosyne', 'uses', 'episodic graph', '2026-05-04', 'w1', 0.8, '2026-05-04T10:00:00'),
+    )
+    con.execute(
+        "INSERT INTO memoria_kg(session_id,subject,predicate,object,message_idx,confidence,source_memory_id) VALUES (?,?,?,?,?,?,?)",
+        ('s1', 'Dashboard', 'shows', 'MEMORIA', 1, 0.7, 'w2'),
+    )
+    con.commit()
+    con.close()
+
+    store = DashboardStore(db)
+    relations = store.triples(limit=20)
+    assert {row['knowledge_store'] for row in relations} == {'Temporal triples', 'Episodic graph', 'MEMORIA'}
+    assert store.stats()['counts']['triples'] == 5
+    assert [row['object'] for row in store.triples(q='episodic', limit=10)] == ['episodic graph']
+    graph = store.graph(q='MEMORIA', limit=10)
+    assert {node['label'] for node in graph['nodes']} == {'Dashboard', 'MEMORIA'}
+
+
 def test_timeline_search_matches_session_id(tmp_path):
     db = tmp_path / 'mnemosyne.db'
     make_db(db)

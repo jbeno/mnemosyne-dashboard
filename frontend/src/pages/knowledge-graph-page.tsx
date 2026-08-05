@@ -47,7 +47,7 @@ export function KnowledgeGraphPage({ databaseKey }: { databaseKey: string }) {
 
   return (
     <div className="space-y-10" aria-busy={loading}>
-      <PageHeader description="Explore relationships between entities and inspect the knowledge triples that produced them." eyebrow="Knowledge" title="Knowledge graph" />
+      <PageHeader description="Explore relationships between entities and inspect the structured facts that produced them." eyebrow="Knowledge" title="Knowledge graph" />
       <MetricStrip metrics={[
         { description: "Unique subjects and objects in the loaded relationship set.", label: "Nodes", value: graph.nodes.length },
         { description: "Subject-predicate-object connections currently loaded.", label: "Relations", value: graph.edges.length },
@@ -65,16 +65,16 @@ export function KnowledgeGraphPage({ databaseKey }: { databaseKey: string }) {
         <TabsList aria-label="Knowledge graph view"><TabsTrigger value="map">Relationship map</TabsTrigger><TabsTrigger value="facts">Facts table</TabsTrigger></TabsList>
         <TabsContent className="pt-6" value="map">
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
-            <NetworkMap edges={graph.edges} nodes={graph.nodes} onSelect={setSelected} selectedId={selected?.id} />
+            <NetworkMap edges={graph.edges} emptyMessage="No structured knowledge relationships match this filter. Mnemosyne populates this map from temporal triples, episodic graph facts, and MEMORIA relationships." nodes={graph.nodes} onSelect={setSelected} selectedId={selected?.id} />
             <aside className="border-t pt-5 xl:border-l xl:border-t-0 xl:pl-6" aria-live="polite">
-              {selected ? <><p className="eyebrow">Selected node</p><h2 className="mt-2 text-xl font-semibold">{selected.label}</h2><KeyValueList className="mt-4" rows={[{ label: "Connections", value: connected.length.toLocaleString() }, { label: "Occurrences", value: Number(selected.count || 0).toLocaleString() }]} /><div className="mt-5 divide-y">{connected.slice(0,10).map((edge) => <div className="py-3" key={edge.id}><Badge variant="outline">{edge.predicate || edge.label || "related"}</Badge><p className="mt-2 text-sm leading-5 text-muted-foreground">{edge.subject} → {edge.object}</p></div>)}</div></> : <><p className="eyebrow">Graph inspector</p><h2 className="mt-2 text-xl font-semibold">Nothing selected</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">Select a node to inspect its connected triples and relationship count.</p></>}
+              {selected ? <><p className="eyebrow">Selected node</p><h2 className="mt-2 text-xl font-semibold">{selected.label}</h2><KeyValueList className="mt-4" rows={[{ label: "Connections", value: connected.length.toLocaleString() }, { label: "Occurrences", value: Number(selected.count || 0).toLocaleString() }]} /><div className="mt-5 divide-y">{connected.slice(0,10).map((edge) => <div className="py-3" key={edge.id}><div className="flex flex-wrap gap-1.5"><Badge variant="outline">{edge.predicate || edge.label || "related"}</Badge>{edge.knowledge_store ? <Badge variant="secondary">{edge.knowledge_store}</Badge> : null}</div><p className="mt-2 text-sm leading-5 text-muted-foreground">{edge.subject} → {edge.object}</p></div>)}</div></> : <><p className="eyebrow">Graph inspector</p><h2 className="mt-2 text-xl font-semibold">Nothing selected</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">Select a node to inspect its connected relationships and source store.</p></>}
             </aside>
           </div>
         </TabsContent>
         <TabsContent className="pt-6" value="facts">
           <Table>
-            <TableHeader><TableRow><TableHead>Subject</TableHead><TableHead>Predicate</TableHead><TableHead>Object</TableHead><TableHead>Confidence</TableHead><TableHead>Source</TableHead><TableHead>Created</TableHead></TableRow></TableHeader>
-            <TableBody>{triples.map((triple, index) => <TableRow key={triple.id || index}><TableCell className="max-w-56 font-medium">{triple.subject || "—"}</TableCell><TableCell><Badge variant="outline">{triple.predicate || "—"}</Badge></TableCell><TableCell className="max-w-72 whitespace-normal">{triple.object || "—"}</TableCell><TableCell className="tabular-nums">{triple.confidence === undefined || triple.confidence === null ? "—" : Number(triple.confidence).toFixed(2)}</TableCell><TableCell>{triple.source || "—"}</TableCell><TableCell className="whitespace-nowrap text-muted-foreground">{formatDate(triple.created_at || triple.valid_from)}</TableCell></TableRow>)}</TableBody>
+            <TableHeader><TableRow><TableHead>Subject</TableHead><TableHead>Predicate</TableHead><TableHead>Object</TableHead><TableHead>Confidence</TableHead><TableHead>Store</TableHead><TableHead>Source</TableHead><TableHead>Created</TableHead></TableRow></TableHeader>
+            <TableBody>{triples.map((triple, index) => <TableRow key={triple.id || index}><TableCell className="max-w-56 font-medium">{triple.subject || "—"}</TableCell><TableCell><Badge variant="outline">{triple.predicate || "—"}</Badge></TableCell><TableCell className="max-w-72 whitespace-normal">{triple.object || "—"}</TableCell><TableCell className="tabular-nums">{triple.confidence === undefined || triple.confidence === null ? "—" : Number(triple.confidence).toFixed(2)}</TableCell><TableCell>{triple.knowledge_store ? <Badge variant="secondary">{triple.knowledge_store}</Badge> : "—"}</TableCell><TableCell>{triple.source || "—"}</TableCell><TableCell className="whitespace-nowrap text-muted-foreground">{formatDate(triple.created_at || triple.valid_from)}</TableCell></TableRow>)}</TableBody>
           </Table>
           {!loading && !triples.length ? <p className="py-8 text-sm text-muted-foreground">No knowledge triples match this filter.</p> : null}
         </TabsContent>

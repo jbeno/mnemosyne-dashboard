@@ -38,8 +38,10 @@ standard-library server and read-only data API remain unchanged.
   the shared responsive Table primitive instead of hand-aligned divs. Tables
   scroll within their own region at compact widths rather than widening the page.
 - **Exploration is shared:** Knowledge Graph and Visualizer use one keyboard-
-  addressable SVG network-map composition with consistent selection, zoom, and
-  inspector behavior.
+  addressable SVG network-map composition with consistent selection, zoom,
+  fullscreen, and inspector behavior. Visualizer can switch to a source-owned
+  Three.js composition that reuses the same deterministic category-aware
+  coordinates and honors reduced-motion preferences.
 
 ## Token layers
 

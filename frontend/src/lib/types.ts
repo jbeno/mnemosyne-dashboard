@@ -43,7 +43,7 @@ export type InferredProfileData = {
 }
 
 export type GraphNode = { id: string; label: string; count?: number; weight?: number; kind?: string; category?: string; preview?: string; memory_id?: string; last_seen?: string }
-export type GraphEdge = { id: string; source: string; target: string; predicate?: string; label?: string; subject?: string; object?: string; confidence?: number; kind?: string }
+export type GraphEdge = { id: string; source: string; target: string; predicate?: string; label?: string; subject?: string; object?: string; confidence?: number; kind?: string; knowledge_store?: string }
 export type GraphData = { nodes: GraphNode[]; edges: GraphEdge[] }
 
 export type MemoriaStats = { tables: Record<string, { count: number; columns: string[] }>; top_sessions: Array<{ session_id: string; count: number }> }
@@ -145,6 +145,7 @@ export type Triple = {
   valid_until?: string
   source?: string
   confidence?: number
+  knowledge_store?: string
 }
 
 export type Consolidation = {

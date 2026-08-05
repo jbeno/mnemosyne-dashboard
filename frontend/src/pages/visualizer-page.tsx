@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { Box, Map } from "lucide-react"
 
 import { ChartPanel } from "@/components/chart-panel"
 import { CategoryBarChart } from "@/components/dashboard-charts"
@@ -6,13 +7,16 @@ import { KeyValueList } from "@/components/key-value-list"
 import { MetricStrip } from "@/components/metric-strip"
 import { NetworkMap } from "@/components/network-map"
 import { PageHeader } from "@/components/page-header"
+import { ThreeNetworkMap } from "@/components/three-network-map"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { dashboardApi } from "@/lib/api"
 import type { ConstellationData, GraphNode } from "@/lib/types"
 import { formatDate } from "@/lib/utils"
 
 export function VisualizerPage({ databaseKey }: { databaseKey: string }) {
+  const [dimension, setDimension] = useState<"2d" | "3d">("2d")
+  const [mode, setMode] = useState<"constellation" | "neural">("constellation")
   const [data, setData] = useState<ConstellationData>({ nodes: [], edges: [], clusters: [] })
   const [selected, setSelected] = useState<GraphNode | null>(null)
   const [loading, setLoading] = useState(true)
@@ -44,10 +48,23 @@ export function VisualizerPage({ databaseKey }: { databaseKey: string }) {
       ]} />
       {error ? <p className="border-l-2 border-destructive px-4 py-2 text-sm" role="alert">{error}</p> : null}
 
-      <Tabs defaultValue="constellation">
-        <TabsList aria-label="Visualization layout"><TabsTrigger value="constellation">Constellation</TabsTrigger><TabsTrigger value="neural">Neural map</TabsTrigger></TabsList>
-        {(["constellation", "neural"] as const).map((mode) => <TabsContent className="pt-6" key={mode} value={mode}><div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]"><NetworkMap edges={data.edges} mode={mode} nodes={data.nodes} onSelect={setSelected} selectedId={selected?.id} /><NodeInspector connected={connected.length} node={selected} /></div></TabsContent>)}
-      </Tabs>
+      <div>
+        <div className="flex flex-col gap-4 border-b sm:flex-row sm:items-center sm:justify-between">
+          <Tabs onValueChange={(value) => setMode(value as typeof mode)} value={mode}>
+            <TabsList aria-label="Visualization topology"><TabsTrigger value="constellation">Constellation</TabsTrigger><TabsTrigger value="neural">Neural map</TabsTrigger></TabsList>
+          </Tabs>
+          <Tabs onValueChange={(value) => setDimension(value as typeof dimension)} value={dimension}>
+            <div className="flex items-center gap-2 pb-2 sm:pb-0">
+              <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">View</span>
+              <TabsList aria-label="Visualization dimension" variant="default"><TabsTrigger value="2d"><Map />2D</TabsTrigger><TabsTrigger value="3d"><Box />3D</TabsTrigger></TabsList>
+            </div>
+          </Tabs>
+        </div>
+        <div className="grid gap-6 pt-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
+          {dimension === "3d" ? <ThreeNetworkMap edges={data.edges} mode={mode} nodes={data.nodes} onSelect={setSelected} selectedId={selected?.id} /> : <NetworkMap edges={data.edges} mode={mode} nodes={data.nodes} onSelect={setSelected} selectedId={selected?.id} />}
+          <NodeInspector connected={connected.length} node={selected} />
+        </div>
+      </div>
 
       <ChartPanel description="Semantic grouping across the loaded visualization snapshot." help="Clusters are inferred from text content for orientation; they are not durable classifications written back to memory." title="Cluster distribution">
         <CategoryBarChart data={data.clusters.slice(0, 12).map((row) => ({ label: row.label, value: row.count }))} label="Nodes" />

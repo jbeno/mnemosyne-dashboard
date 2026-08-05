@@ -5,7 +5,7 @@ import type { ActivityPoint } from "@/lib/types"
 
 const activityConfig = {
   memories: { label: "Memories", color: "var(--chart-1)" },
-  triples: { label: "Knowledge triples", color: "var(--chart-2)" },
+  triples: { label: "Knowledge relations", color: "var(--chart-2)" },
   consolidations: { label: "Consolidations", color: "var(--chart-3)" },
 } satisfies ChartConfig
 
