@@ -1,16 +1,21 @@
-import type { ReactNode } from "react"
-import { Menu, Moon, RefreshCw, Sun } from "lucide-react"
+import { useEffect, useState, type ReactNode } from "react"
+import { Database, Menu, Moon, RefreshCw, Search, Sun, X } from "lucide-react"
 
-import { AppSidebar, DatabaseMark, type PageId } from "@/components/app-sidebar"
+import { AppSidebar, type PageId } from "@/components/app-sidebar"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import type { Database } from "@/lib/types"
 import type { Theme } from "@/hooks/use-theme"
+import type { Database as DatabaseRecord } from "@/lib/types"
+import { cn } from "@/lib/utils"
+
+const SIDEBAR_STORAGE_KEY = "mnemosyne:sidebar-collapsed"
 
 export function AppShell({
   page,
   onNavigate,
+  onSearch,
   theme,
   onToggleTheme,
   databases,
@@ -22,20 +27,46 @@ export function AppShell({
 }: {
   page: PageId
   onNavigate: (page: PageId) => void
+  onSearch: (query: string) => void
   theme: Theme
   onToggleTheme: () => void
-  databases: Database[]
+  databases: DatabaseRecord[]
   activeDatabase: string
   switching: boolean
   onSelectDatabase: (path: string) => void
-  onReload: () => void
+  onReload: () => void | Promise<void>
   children: ReactNode
 }) {
+  const [collapsed, setCollapsed] = useState(() => window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true")
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [refreshing, setRefreshing] = useState(false)
+
+  useEffect(() => {
+    window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(collapsed))
+  }, [collapsed])
+
+  const activeRecord = databases.find((database) => database.path === activeDatabase)
+  const submitSearch = () => {
+    if (searchQuery.trim()) onSearch(searchQuery.trim())
+    setSearchOpen(false)
+  }
+  const reload = async () => {
+    if (refreshing) return
+    setRefreshing(true)
+    const minimumFeedback = new Promise((resolve) => window.setTimeout(resolve, 650))
+    try {
+      await Promise.all([Promise.resolve(onReload()), minimumFeedback])
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
   return (
     <div className="min-h-screen">
-      <AppSidebar onNavigate={onNavigate} page={page} />
-      <div className="lg:pl-64">
-        <header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b bg-background/85 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+      <AppSidebar collapsed={collapsed} onNavigate={onNavigate} onToggleCollapsed={() => setCollapsed((value) => !value)} page={page} />
+      <div className={cn("transition-[padding]", collapsed ? "lg:pl-16" : "lg:pl-64")}>
+        <header className="sticky top-0 z-40 flex h-16 items-center gap-2 border-b bg-background/85 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
           <Sheet>
             <SheetTrigger asChild>
               <Button aria-label="Open navigation" className="lg:hidden" size="icon" variant="ghost">
@@ -49,40 +80,87 @@ export function AppShell({
             </SheetContent>
           </Sheet>
 
-          <div className="flex min-w-0 flex-1 items-center gap-2 lg:max-w-sm">
-            <DatabaseMark />
-            {databases.length ? (
-              <Select disabled={switching} onValueChange={onSelectDatabase} value={activeDatabase}>
-                <SelectTrigger aria-label="Active database" className="w-full border-0 bg-transparent px-1 shadow-none">
-                  <SelectValue placeholder="Select database" />
-                </SelectTrigger>
-                <SelectContent>
-                  {databases.map((database) => (
-                    <SelectItem key={database.path} value={database.path}>
-                      {database.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <span className="truncate text-sm text-muted-foreground">Loading database…</span>
-            )}
-          </div>
+          {databases.length ? (
+            <Select disabled={switching} onValueChange={onSelectDatabase} value={activeDatabase}>
+              <SelectTrigger
+                aria-label="Active memory database"
+                className="w-32 shrink-0 gap-1.5 px-2 font-medium min-[380px]:w-48 sm:w-60"
+                title={`Memory database: ${activeRecord?.label || "select"}`}
+              >
+                <Database className="size-4 shrink-0" />
+                <span className="min-w-0 flex-1 truncate text-left">
+                  {activeRecord?.label || (switching ? "Switching memory…" : "Loading memory…")}
+                </span>
+              </SelectTrigger>
+              <SelectContent className="min-w-[var(--radix-select-trigger-width)]">
+                {databases.map((database) => <SelectItem key={database.path} value={database.path}>{database.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          ) : (
+            <div className="flex h-9 w-32 shrink-0 items-center gap-2 rounded-md border px-2.5 text-sm text-muted-foreground min-[380px]:w-44 sm:w-60">
+              <Database className="size-4 shrink-0" />
+              <span className="truncate">Loading memory…</span>
+            </div>
+          )}
 
-          <Button aria-label="Refresh dashboard data" disabled={switching} onClick={onReload} size="icon" variant="ghost">
-            <RefreshCw className={`size-4 ${switching ? "animate-spin" : ""}`} />
-          </Button>
-          <Button
-            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-            onClick={onToggleTheme}
-            size="icon"
-            variant="ghost"
-          >
-            {theme === "dark" ? <Moon className="size-4" /> : <Sun className="size-4" />}
-          </Button>
+          <div className="ml-auto flex items-center gap-0.5 sm:gap-1">
+            <div className="relative">
+              <Button aria-expanded={searchOpen} aria-label="Search memories" onClick={() => setSearchOpen((value) => !value)} size="icon" title="Search memories" variant="ghost">
+                <Search />
+              </Button>
+              {searchOpen ? (
+                <SearchField autoFocus className="fixed left-4 right-4 top-16 w-auto rounded-md border bg-popover p-2 shadow-xl sm:left-auto sm:w-[28rem]" onChange={setSearchQuery} onSubmit={submitSearch} query={searchQuery} />
+              ) : null}
+            </div>
+
+            <Button aria-label="Refresh dashboard data" disabled={switching || refreshing} onClick={() => void reload()} size="icon" title="Refresh dashboard data" variant="ghost">
+              <RefreshCw className={switching || refreshing ? "animate-spin" : ""} />
+            </Button>
+            <Button
+              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+              onClick={onToggleTheme}
+              size="icon"
+              title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+              variant="ghost"
+            >
+              {theme === "dark" ? <Moon /> : <Sun />}
+            </Button>
+          </div>
         </header>
         <main className="mx-auto w-full max-w-[100rem] px-4 py-8 sm:px-6 lg:px-8 lg:py-10">{children}</main>
       </div>
     </div>
+  )
+}
+
+function SearchField({
+  autoFocus = false,
+  className,
+  onChange,
+  onSubmit,
+  query,
+}: {
+  autoFocus?: boolean
+  className?: string
+  onChange: (value: string) => void
+  onSubmit: () => void
+  query: string
+}) {
+  return (
+    <form className={cn("relative", className)} onSubmit={(event) => { event.preventDefault(); onSubmit() }} role="search">
+      <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Input aria-label="Search all memories" autoFocus={autoFocus} className="bg-background/35 pl-9 pr-9" onChange={(event) => onChange(event.target.value)} placeholder="Search all memories…" value={query} />
+      {query ? (
+        <button
+          aria-label="Clear search"
+          className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-sm text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={() => onChange("")}
+          type="button"
+        >
+          <X className="size-4" />
+        </button>
+      ) : null}
+      <button className="sr-only" type="submit">Search</button>
+    </form>
   )
 }

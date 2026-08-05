@@ -48,7 +48,7 @@ function queryFor(filters: Filters, offset = 0): MemoryQuery {
   }
 }
 
-export function MemoriesPage({ stats, databaseKey }: { stats: Stats | null; databaseKey: string }) {
+export function MemoriesPage({ stats, databaseKey, searchRequest = "" }: { stats: Stats | null; databaseKey: string; searchRequest?: string }) {
   const [filters, setFilters] = useState<Filters>(initialFilters)
   const [applied, setApplied] = useState<Filters>(initialFilters)
   const [items, setItems] = useState<Memory[]>([])
@@ -71,10 +71,11 @@ export function MemoriesPage({ stats, databaseKey }: { stats: Stats | null; data
   }, [])
 
   useEffect(() => {
-    setFilters(initialFilters)
-    setApplied(initialFilters)
-    void load(initialFilters)
-  }, [databaseKey, load])
+    const requested = { ...initialFilters, q: searchRequest }
+    setFilters(requested)
+    setApplied(requested)
+    void load(requested)
+  }, [databaseKey, load, searchRequest])
 
   const update = (key: keyof Filters, value: string) => setFilters((current) => ({ ...current, [key]: value }))
   const apply = () => {
@@ -91,7 +92,7 @@ export function MemoriesPage({ stats, databaseKey }: { stats: Stats | null; data
       />
 
       <form
-        className="flex flex-col gap-3 border-b pb-6 sm:flex-row sm:flex-wrap"
+        className="flex flex-col gap-3 sm:flex-row sm:flex-wrap"
         onSubmit={(event) => {
           event.preventDefault()
           apply()

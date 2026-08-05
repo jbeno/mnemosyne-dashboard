@@ -41,7 +41,7 @@ export function HistoryPage({ databaseKey }: { databaseKey: string }) {
         eyebrow="Memory"
         title="History"
       />
-      <form className="grid gap-3 border-b pb-6 md:grid-cols-[minmax(16rem,1fr)_12rem_auto]" onSubmit={(event) => { event.preventDefault(); void load(query, group) }}>
+      <form className="grid gap-3 md:grid-cols-[minmax(16rem,1fr)_12rem_auto]" onSubmit={(event) => { event.preventDefault(); void load(query, group) }}>
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input aria-label="Search history" className="pl-9" onChange={(event) => setQuery(event.target.value)} placeholder="Search events…" value={query} />

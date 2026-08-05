@@ -346,6 +346,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send_json({"items": self.store.audit_log(limit=_safe_int(q.get("limit"), 100, maximum=1000))})
             if path == "/api/stats":
                 return self._send_json(self.store.stats())
+            if path == "/api/activity-series":
+                return self._send_json(self.store.activity_series(days=_safe_int(q.get("days"), 30, minimum=7, maximum=365)))
             if path == "/api/digest/today":
                 return self._send_json(self.store.today_digest(day=q.get("day", ""), limit=_safe_int(q.get("limit"), 80, maximum=300)))
             if path == "/api/review":

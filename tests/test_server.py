@@ -141,6 +141,19 @@ def test_memory_intelligence_endpoints_are_read_only(tmp_path, monkeypatch):
         server.close()
 
 
+def test_activity_series_endpoint(tmp_path, monkeypatch):
+    server = ServerHarness(tmp_path, monkeypatch)
+    try:
+        status, _headers, body = _request(f"{server.base}/api/activity-series?days=30")
+        payload = json.loads(body)
+        assert status == 200
+        assert payload["days"] == 30
+        assert len(payload["series"]) == 30
+        assert {"date", "memories", "triples", "consolidations", "total"} <= payload["series"][0].keys()
+    finally:
+        server.close()
+
+
 def test_persona_and_canonical_endpoints(tmp_path, monkeypatch):
     server = ServerHarness(tmp_path, monkeypatch)
     try:

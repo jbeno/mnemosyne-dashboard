@@ -606,6 +606,64 @@ class DashboardStore:
                 "recent": recent,
             }
 
+    def activity_series(self, days: int = 30) -> dict[str, Any]:
+        """Return daily creation activity for the dashboard overview.
+
+        This is a read-only aggregation over timestamps already stored by
+        Mnemosyne. Missing tables or timestamp columns contribute zeroes so the
+        dashboard can render the same chart across schema generations.
+        """
+        days = max(7, min(int(days or 30), 365))
+        today = datetime.now(UTC).date()
+        start = today - timedelta(days=days - 1)
+        buckets = {
+            (start + timedelta(days=offset)).isoformat(): {
+                "date": (start + timedelta(days=offset)).isoformat(),
+                "memories": 0,
+                "triples": 0,
+                "consolidations": 0,
+                "total": 0,
+            }
+            for offset in range(days)
+        }
+
+        with self.session() as con:
+            tables = self._tables(con)
+            specs = [
+                ("working_memory", "memories", ("timestamp", "created_at")),
+                ("episodic_memory", "memories", ("timestamp", "created_at")),
+                ("triples", "triples", ("valid_from", "created_at")),
+                ("consolidation_log", "consolidations", ("created_at", "timestamp")),
+            ]
+            for table, metric, timestamp_candidates in specs:
+                if table not in tables:
+                    continue
+                columns = self._columns(con, table)
+                available = [name for name in timestamp_candidates if name in columns]
+                if not available:
+                    continue
+                timestamp_expr = "COALESCE(" + ", ".join(f"NULLIF({name}, '')" for name in available) + ", '')"
+                rows = con.execute(
+                    f"SELECT substr({timestamp_expr}, 1, 10) AS day, COUNT(*) AS count "
+                    f"FROM {table} WHERE substr({timestamp_expr}, 1, 10) >= ? "
+                    "GROUP BY day ORDER BY day",
+                    (start.isoformat(),),
+                )
+                for row in rows:
+                    day = str(row["day"] or "")
+                    if day in buckets:
+                        buckets[day][metric] += int(row["count"] or 0)
+
+        series = list(buckets.values())
+        for point in series:
+            point["total"] = point["memories"] + point["triples"] + point["consolidations"]
+        return {
+            "days": days,
+            "start": start.isoformat(),
+            "end": today.isoformat(),
+            "series": series,
+        }
+
     def list_memories(
         self,
         kind: str = "all",
