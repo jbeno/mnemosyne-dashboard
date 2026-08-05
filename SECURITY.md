@@ -33,3 +33,36 @@ To avoid path traversal or arbitrary local-file reads on a LAN-exposed server, t
 For public repos, report vulnerabilities privately through GitHub Security Advisories if enabled, or open a minimal issue without sensitive memory/database contents.
 
 Do not paste private Mnemosyne memory content into public issues.
+
+## Frontend dependency safety
+
+The React UI candidate is isolated in `frontend/`, uses exact dependency
+versions, and commits its Bun lockfile. Repository-local `frontend/bunfig.toml`
+enforces a seven-day release-age gate and disables dependency lifecycle scripts:
+
+```toml
+[install]
+minimumReleaseAge = 604800
+exact = true
+ignoreScripts = true
+```
+
+Use only frozen installs for normal work:
+
+```bash
+cd frontend
+bun install --frozen-lockfile --ignore-scripts
+```
+
+Do not bypass the age gate to pick up a new package or version during an active
+supply-chain incident. To compare the complete lockfile with a current local IOC
+CSV without uploading project metadata, run:
+
+```bash
+cd frontend
+bun run audit:iocs -- /path/to/keyv-packages.csv
+```
+
+The audit fails on an exact malicious package/version match and reports package
+name overlap separately. Review the CSV source and timestamp before relying on
+the result.

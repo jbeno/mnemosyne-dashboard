@@ -2,6 +2,8 @@
 
 ## 0.15.0
 
+- Add a parallel React/shadcn-style UI candidate at `/candidate` with a source-owned component layer, grouped navigation, persistent database/theme controls, and migrated Overview, Today, and About views.
+- Pin the candidate dependency graph exactly, enforce a seven-day Bun release-age gate with lifecycle scripts disabled, and add an offline lockfile-to-IOC audit command.
 - Add a global database selector to the desktop rail and compact mobile header so Mnemosyne databases can be switched at runtime without restarting.
 - Discover direct-profile and bank-style Hermes brains automatically, including when `HERMES_HOME` points at an isolated profile; switching stays read-only and limited to the discovered/configured set.
 - Close SQLite connections after every request to prevent the dashboard from exhausting file descriptors during persistent operation.
