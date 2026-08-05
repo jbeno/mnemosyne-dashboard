@@ -6,8 +6,12 @@ import { Button } from "@/components/ui/button"
 import { useDashboard } from "@/hooks/use-dashboard"
 import { useTheme } from "@/hooks/use-theme"
 import { AboutPage } from "@/pages/about-page"
+import { HistoryPage } from "@/pages/history-page"
+import { LifecyclePage } from "@/pages/lifecycle-page"
+import { MemoriesPage } from "@/pages/memories-page"
 import { OverviewPage } from "@/pages/overview-page"
 import { PlaceholderPage } from "@/pages/placeholder-page"
+import { ReviewPage } from "@/pages/review-page"
 import { TodayPage } from "@/pages/today-page"
 
 const validPages = new Set<PageId>([
@@ -57,6 +61,10 @@ export default function App() {
   let content
   if (page === "overview") content = <OverviewPage loading={dashboard.loading} stats={dashboard.stats} />
   else if (page === "today") content = <TodayPage digest={dashboard.today} loading={dashboard.loading} />
+  else if (page === "memories") content = <MemoriesPage databaseKey={dashboard.activeDatabase} stats={dashboard.stats} />
+  else if (page === "review") content = <ReviewPage databaseKey={dashboard.activeDatabase} />
+  else if (page === "lifecycle") content = <LifecyclePage databaseKey={dashboard.activeDatabase} />
+  else if (page === "history") content = <HistoryPage databaseKey={dashboard.activeDatabase} />
   else if (page === "about") content = <AboutPage />
   else content = <PlaceholderPage page={page} />
 
