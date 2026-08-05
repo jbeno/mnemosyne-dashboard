@@ -470,6 +470,14 @@ class DashboardStore:
                     counts[table] = int(con.execute(f"SELECT count(*) FROM {table}").fetchone()[0])
                 else:
                     counts[table] = 0
+            # ``triples`` is the stable dashboard metric name, but modern
+            # Mnemosyne also stores structured relations in the episodic graph
+            # and MEMORIA. Diagnostics still exposes every raw table count.
+            counts["triples"] = sum(
+                int(con.execute(f"SELECT count(*) FROM {table}").fetchone()[0])
+                for table in ("triples", "facts", "memoria_kg")
+                if table in tables
+            )
 
             by_source_raw = []
             by_scope_raw = []
@@ -633,6 +641,7 @@ class DashboardStore:
                 ("working_memory", "memories", ("timestamp", "created_at")),
                 ("episodic_memory", "memories", ("timestamp", "created_at")),
                 ("triples", "triples", ("valid_from", "created_at")),
+                ("facts", "triples", ("timestamp", "created_at")),
                 ("consolidation_log", "consolidations", ("created_at", "timestamp")),
             ]
             for table, metric, timestamp_candidates in specs:
@@ -947,6 +956,14 @@ class DashboardStore:
         }
 
     def triples(self, q: str = "", subject: str = "", predicate: str = "", object_: str = "", limit: int = 200) -> list[dict[str, Any]]:
+        """Return structured knowledge relations across Mnemosyne generations.
+
+        Mnemosyne currently has three legitimate subject/predicate/object stores:
+        temporal ``triples``, episodic-graph ``facts``, and MEMORIA's
+        ``memoria_kg``.  Older dashboard versions only read ``triples``, which
+        made current databases appear to have an empty knowledge graph.  Keep
+        the public shape stable while preserving the originating store.
+        """
         limit = max(1, min(int(limit or 200), 1000))
         where = []
         params: list[Any] = []
@@ -958,12 +975,41 @@ class DashboardStore:
             if value:
                 where.append(f"{col} REGEXP ?")
                 params.append(self._prefix_pattern(value))
-        clause = "WHERE " + " AND ".join(where) if where else ""
         with self.session() as con:
-            if "triples" not in self._tables(con):
+            tables = self._tables(con)
+            selects: list[str] = []
+            if "triples" in tables:
+                selects.append("""
+                    SELECT 'temporal:' || CAST(id AS TEXT) AS id,
+                           subject, predicate, object,
+                           valid_from, valid_until, source, confidence,
+                           created_at, 'Temporal triples' AS knowledge_store
+                    FROM triples
+                """)
+            if "facts" in tables:
+                selects.append("""
+                    SELECT 'episodic:' || CAST(fact_id AS TEXT) AS id,
+                           subject, predicate, object,
+                           timestamp AS valid_from, NULL AS valid_until,
+                           source_msg_id AS source, confidence, created_at,
+                           'Episodic graph' AS knowledge_store
+                    FROM facts
+                """)
+            if "memoria_kg" in tables:
+                selects.append("""
+                    SELECT 'memoria:' || CAST(id AS TEXT) AS id,
+                           subject, predicate, object,
+                           NULL AS valid_from, NULL AS valid_until,
+                           source_memory_id AS source, confidence,
+                           NULL AS created_at, 'MEMORIA' AS knowledge_store
+                    FROM memoria_kg
+                """)
+            if not selects:
                 return []
+            clause = "WHERE " + " AND ".join(where) if where else ""
             return [dict(r) for r in con.execute(
-                f"SELECT id, subject, predicate, object, valid_from, valid_until, source, confidence, created_at FROM triples {clause} ORDER BY created_at DESC LIMIT ?",
+                f"SELECT * FROM ({' UNION ALL '.join(selects)}) AS knowledge_relations "
+                f"{clause} ORDER BY COALESCE(created_at, valid_from, '') DESC, id DESC LIMIT ?",
                 [*params, limit],
             )]
 
@@ -998,6 +1044,7 @@ class DashboardStore:
                 "valid_until": t.get("valid_until"),
                 "created_at": t.get("created_at"),
                 "source_name": t.get("source"),
+                "knowledge_store": t.get("knowledge_store"),
             })
         for n in nodes:
             n["count"] = node_counts.get(n["label"], 0)
@@ -1426,6 +1473,10 @@ class DashboardStore:
         limit = max(1, min(int(limit or 80), 300))
         memories_today: list[dict[str, Any]] = []
         recalled_today: list[dict[str, Any]] = []
+        triples_today = [
+            row for row in self.triples(limit=1000)
+            if str(row.get("created_at") or row.get("valid_from") or "")[:10] == day
+        ][:limit]
         with self.session() as con:
             tables = self._tables(con)
             for table, tier in (("working_memory", "working"), ("episodic_memory", "episodic")):
@@ -1441,12 +1492,6 @@ class DashboardStore:
                     for row in con.execute(recalled_sql, (day, limit)):
                         recalled_today.append(self._enrich_memory(self._dict(row), tier))
 
-            triples_today = []
-            if "triples" in tables:
-                triples_today = [dict(r) for r in con.execute(
-                    "SELECT id, subject, predicate, object, valid_from, valid_until, source, confidence, created_at FROM triples WHERE substr(COALESCE(created_at, valid_from, ''), 1, 10) = ? ORDER BY COALESCE(created_at, valid_from) DESC LIMIT ?",
-                    (day, limit),
-                )]
             consolidations_today = []
             if "consolidation_log" in tables:
                 consolidations_today = [dict(r) for r in con.execute(

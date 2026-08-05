@@ -23,6 +23,10 @@ fully migrated Overview, Today, Browse Memories, Trust Review, Lifecycle,
 History, Context Bank, Knowledge Graph, MEMORIA, Persona & Facts, Visualizer,
 Settings, and About pages. Data-heavy routes are split into lazy-loaded bundles
 so the charting and exploration tools do not inflate every navigation path.
+The Visualizer includes stable 2D and rotating 3D Constellation/Neural views,
+fullscreen controls, and node inspection without fetching browser assets from a
+CDN. The Knowledge Graph normalizes temporal triples, episodic graph facts, and
+MEMORIA relationships while retaining their source-store provenance.
 
 Build the checked-in candidate assets with Bun:
 
@@ -129,35 +133,33 @@ The generator creates a temporary mock SQLite database, starts the dashboard on 
 ## Features
 
 - Read-only Memory Intelligence views:
-  - Today — daily digest of memories added/recalled, triples, consolidations, entities, sources, and sessions
-  - Context Bank — inferred context sections derived from active memories and triples without writing back
-  - Visualiser — selectable Constellation and Neural Map views with click-through read-only inspectors
-  - Visualiser 3D — separate Three.js/WebGL comparison lab for GPU-rendered Constellation and Neural Map prototypes
+  - Today — daily digest of memories added/recalled, structured relations, consolidations, entities, sources, and sessions
+  - Context Bank — inferred context sections derived from active memories and structured relations without writing back
+  - Visualiser — selectable Constellation and Neural Map views with stable 2D and rotating 3D renderers, fullscreen controls, and click-through read-only inspectors
 - Nine-section product navigation instead of raw database tabs:
   - Overview — counts, breakdowns, quick actions, and recent memories
   - Today — read-only daily memory digest
   - Context Bank — inferred context from active memory
   - Visualiser — Constellation and Neural Map memory visualisers
-  - Visualiser 3D — Three.js/WebGL Constellation and Neural Map comparison page
   - Explore — global search, memory browser, and recall debugger
   - Activity — timeline and consolidation history
-  - Graph — relationship graph and triples table
+  - Graph — relationship graph and structured-facts table
   - Settings — optional password authentication and server/database config
-- Overview counts for working memory, episodic memory, triples, and consolidations
+- Overview counts for working memory, episodic memory, structured knowledge relations, and consolidations
 - Recent memory cards with raw JSON detail drawer
 - Clickable overview breakdown rows and quick actions that jump into filtered workflows
 - Explore section:
-  - Global search across memories, triples, and consolidations
+  - Global search across memories, structured relations, and consolidations
   - Memory browser with query, tier/source/scope/session/status filters, sorting, URL deep links, bulk selection, and safe bulk maintenance
   - Recall debugger with approximate ranking explanations
 - Activity section:
   - Mini timeline grouped by day or session
   - Consolidation history with filtering, JSON inspection, and jump-to-session memories
 - Graph section:
-  - Interactive relationship graph with query filtering, mouse-wheel zoom, drag-to-pan, and reset view
+  - Interactive relationship graph across temporal triples, episodic facts, and MEMORIA relationships with query filtering, mouse-wheel zoom, drag-to-pan, fullscreen, and reset view
   - Clickable nodes and edges
-  - Inspector panel with jumps into Triples and Memories
-  - Triples table with clickable row details
+  - Inspector panel with relation-store provenance
+  - Structured-facts table with temporal, episodic, and MEMORIA source badges
 - Optional password authentication, configurable from the Settings tab
 - Password-gated memory maintenance mode with supersede, expire/invalidate, and importance update actions
 - Automatic SQLite backups and JSONL audit log for admin memory mutations

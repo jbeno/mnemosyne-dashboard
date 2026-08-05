@@ -20,6 +20,8 @@
 - Remove redundant page-header and filter dividers, correct line tabs to use an underline without trigger boxes, and extend accessible comparison charts to Lifecycle and Trust Review.
 - Finish Context Bank, Knowledge Graph, MEMORIA, Persona & Facts, Visualizer, and Settings with real read-only APIs, accessible tables, filters, charts, network inspection, diagnostics, and responsive tab overflow.
 - Split data-heavy candidate routes into lazy-loaded bundles and add source-owned shadcn-style Badge and responsive Table primitives without adding runtime dependencies.
+- Restore category-aware spatial layouts for Constellation and Neural Map, add integrated 2D/3D switching, orbit/pan/zoom controls, fullscreen presentation, reduced-motion handling, and click-through node inspection using the repository's vendored Three.js runtime.
+- Read the current episodic `facts` and MEMORIA knowledge stores alongside temporal `triples`, preserving store provenance so modern Mnemosyne databases no longer render an empty Knowledge Graph.
 - Document standalone use without Hermes and the maintained-fork workflow.
 
 ## 0.14.0
