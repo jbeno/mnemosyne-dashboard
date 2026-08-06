@@ -46,6 +46,7 @@ export const dashboardApi = {
   runtimeStatus: () => request<RuntimeStatus>("/api/runtime/status"),
   realtimeStatus: () => request<RealtimeStatus>("/api/realtime/status"),
   backup: () => request<{ ok: boolean; backup: { path: string } }>("/api/admin/backup", { method: "POST", body: "{}" }),
+  bulkMaintainMemories: (memoryIds: string[], action: "veracity" | "importance" | "expiry" | "invalidate", value: unknown, backup = true) => request<{ ok: boolean; count: number; items: Memory[]; backup?: { path: string } }>("/api/admin/memory/bulk", { method: "POST", body: JSON.stringify({ memory_ids: memoryIds, action, value, backup }) }),
   audit: (limit = 100) => request<{ items: AuditEntry[] }>(`/api/admin/audit?limit=${limit}`),
   invalidateMemory: (memoryId: string, backup = true) => request<{ ok: boolean; item?: Memory; backup?: { path: string } }>("/api/admin/memory/invalidate", { method: "POST", body: JSON.stringify({ memory_id: memoryId, backup }) }),
   setMemoryImportance: (memoryId: string, importance: number, backup = true) => request<{ ok: boolean; item: Memory; importance: number }>("/api/admin/memory/importance", { method: "POST", body: JSON.stringify({ memory_id: memoryId, importance, backup }) }),

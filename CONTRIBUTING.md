@@ -36,6 +36,9 @@ Please keep these invariants unless a change explicitly documents and tests a di
 - The dashboard binds to `0.0.0.0` by default for easy LAN access.
 - SQLite is opened through a read-only URI (`mode=ro`).
 - Memory admin/editing is disabled by default; LAN/non-local admin mode must stay password-gated.
+- Configuration, database selection, backups, and other control-plane actions must require localhost or password-authenticated access.
+- SQLite backups must use the online backup API, pass an integrity check, and retain owner-only permissions; never copy only the main file of a WAL database.
+- Bulk maintenance must validate the complete selection before writing, use one transaction and at most one backup, and report the affected count.
 - Static assets are served only from `static/`.
 - External JavaScript/CSS/CDN dependencies are avoided.
 - LAN exposure is the default and should be documented with auth/firewall guidance.

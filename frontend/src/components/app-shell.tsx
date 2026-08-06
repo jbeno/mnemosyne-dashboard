@@ -20,6 +20,7 @@ export function AppShell({
   onToggleTheme,
   databases,
   activeDatabase,
+  databaseSelectionAllowed,
   switching,
   onSelectDatabase,
   onReload,
@@ -33,6 +34,7 @@ export function AppShell({
   onToggleTheme: () => void
   databases: DatabaseRecord[]
   activeDatabase: string
+  databaseSelectionAllowed: boolean
   switching: boolean
   onSelectDatabase: (path: string) => void
   onReload: () => void | Promise<void>
@@ -84,11 +86,11 @@ export function AppShell({
           </Sheet>
 
           {databases.length ? (
-            <Select disabled={switching} onValueChange={onSelectDatabase} value={activeDatabase}>
+            <Select disabled={switching || !databaseSelectionAllowed} onValueChange={onSelectDatabase} value={activeDatabase}>
               <SelectTrigger
                 aria-label="Active memory database"
                 className="w-32 shrink-0 gap-1.5 px-2 font-medium min-[380px]:w-48 sm:w-60"
-                title={`Memory database: ${activeRecord?.label || "select"}`}
+                title={databaseSelectionAllowed ? `Memory database: ${activeRecord?.label || "select"}` : "Database selection requires localhost or password authentication"}
               >
                 <Database className="size-4 shrink-0" />
                 <span className="min-w-0 flex-1 truncate text-left">

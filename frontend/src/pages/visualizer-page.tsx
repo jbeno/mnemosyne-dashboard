@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
-import { Box, Map as MapIcon } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import { ChartPanel } from "@/components/chart-panel"
 import { CategoryBarChart } from "@/components/dashboard-charts"
@@ -32,17 +31,20 @@ export function VisualizerPage({
 }) {
   const [colorMode, setColorMode] = useState<NetworkColorMode>("type")
   const [dimension, setDimension] = useState<"2d" | "3d">("2d")
+  const [searchQuery, setSearchQuery] = useState("")
   const [mode, setMode] = useState<"constellation" | "neural">("constellation")
   const [data, setData] = useState<ConstellationData>({ nodes: [], edges: [], clusters: [] })
   const [selected, setSelected] = useState<GraphNode | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const canvasFrameRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let active = true
     setLoading(true)
     setError(null)
     setSelected(null)
+    setSearchQuery("")
     void dashboardApi.constellation()
       .then((response) => {
         if (!active) return
@@ -89,19 +91,15 @@ export function VisualizerPage({
       {error ? <p className="border-l-2 border-destructive px-4 py-2 text-sm" role="alert">{error}</p> : null}
 
       <div>
-        <div className="flex flex-col gap-4 border-b sm:flex-row sm:items-center sm:justify-between">
+        <div className="border-b">
           <Tabs onValueChange={(value) => setMode(value as typeof mode)} value={mode}>
             <TabsList aria-label="Visualization topology"><TabsTrigger value="constellation">Constellation</TabsTrigger><TabsTrigger value="neural">Neural map</TabsTrigger></TabsList>
           </Tabs>
-          <Tabs onValueChange={(value) => setDimension(value as typeof dimension)} value={dimension}>
-            <div className="flex items-center gap-2 pb-2 sm:pb-0">
-              <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">View</span>
-              <TabsList aria-label="Visualization dimension" variant="default"><TabsTrigger value="2d"><MapIcon />2D</TabsTrigger><TabsTrigger value="3d"><Box />3D</TabsTrigger></TabsList>
-            </div>
-          </Tabs>
         </div>
         <div className="grid gap-6 pt-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
-          {dimension === "3d" ? <ThreeNetworkMap colorMode={colorMode} edges={data.edges} fullscreenPanel={<NodeInspector connected={connected.length} linkedNodes={linkedNodes} node={selected} onSelect={setSelected} />} mode={mode} nodes={data.nodes} onClearSelection={() => setSelected(null)} onColorModeChange={setColorMode} onSelect={setSelected} selectedId={selected?.id} showEdgeLabels /> : <NetworkMap colorMode={colorMode} edges={data.edges} fullscreenPanel={<NodeInspector connected={connected.length} linkedNodes={linkedNodes} node={selected} onSelect={setSelected} />} mode={mode} nodes={data.nodes} onClearSelection={() => setSelected(null)} onColorModeChange={setColorMode} onSelect={setSelected} selectedId={selected?.id} showEdgeLabels />}
+          <div className="bg-background fullscreen:bg-background" ref={canvasFrameRef}>
+            {dimension === "3d" ? <ThreeNetworkMap colorMode={colorMode} dimension={dimension} edges={data.edges} fullscreenPanel={<NodeInspector connected={connected.length} linkedNodes={linkedNodes} node={selected} onSelect={setSelected} />} fullscreenTargetRef={canvasFrameRef} mode={mode} nodes={data.nodes} onClearSelection={() => setSelected(null)} onColorModeChange={setColorMode} onDimensionChange={setDimension} onSearchQueryChange={setSearchQuery} onSelect={setSelected} searchQuery={searchQuery} selectedId={selected?.id} showEdgeLabels /> : <NetworkMap colorMode={colorMode} dimension={dimension} edges={data.edges} fullscreenPanel={<NodeInspector connected={connected.length} linkedNodes={linkedNodes} node={selected} onSelect={setSelected} />} fullscreenTargetRef={canvasFrameRef} mode={mode} nodes={data.nodes} onClearSelection={() => setSelected(null)} onColorModeChange={setColorMode} onDimensionChange={setDimension} onSearchQueryChange={setSearchQuery} onSelect={setSelected} searchQuery={searchQuery} selectedId={selected?.id} showEdgeLabels />}
+          </div>
           <NodeInspector className="border-t pt-5 xl:border-l xl:border-t-0 xl:pl-6" connected={connected.length} linkedNodes={linkedNodes} node={selected} onSelect={setSelected} />
         </div>
       </div>

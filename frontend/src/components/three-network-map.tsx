@@ -1,10 +1,12 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react"
-import { Maximize2, Minimize2, Palette, Pause, Play, RotateCcw, Tags } from "lucide-react"
+import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react"
+import { Maximize2, Minimize2, Pause, Play, RotateCcw, Tags } from "lucide-react"
 
+import { CanvasTooltip, FullscreenInspectorPanel, NetworkDimensionTabs, NetworkSearchControl, type NetworkDimension } from "@/components/network-canvas-controls"
 import { NetworkLegend } from "@/components/network-legend"
 import { Button } from "@/components/ui/button"
-import { networkColorModeLabel, networkNodeColor, type NetworkColorMode } from "@/lib/network-appearance"
+import { networkNodeColor, type NetworkColorMode } from "@/lib/network-appearance"
 import { layoutNetwork, limitNetworkEdges, type NetworkMode, type SpatialNode } from "@/lib/network-layout"
+import { networkNodeMatchesSearch } from "@/lib/network-search"
 import type { GraphEdge, GraphNode } from "@/lib/types"
 
 type RendererControls = { reset: () => void }
@@ -14,22 +16,32 @@ export function ThreeNetworkMap({
   colorMode,
   edges,
   fullscreenPanel,
+  fullscreenTargetRef,
   mode,
   nodes,
   onClearSelection,
   onColorModeChange,
+  onDimensionChange,
+  onSearchQueryChange,
   onSelect,
+  dimension = "3d",
+  searchQuery = "",
   selectedId,
   showEdgeLabels = false,
 }: {
   colorMode: NetworkColorMode
   edges: GraphEdge[]
   fullscreenPanel?: ReactNode
+  fullscreenTargetRef?: RefObject<HTMLElement | null>
   mode: NetworkMode
   nodes: GraphNode[]
   onClearSelection?: () => void
   onColorModeChange: (mode: NetworkColorMode) => void
+  onDimensionChange?: (dimension: NetworkDimension) => void
+  onSearchQueryChange?: (query: string) => void
   onSelect?: (node: GraphNode) => void
+  dimension?: NetworkDimension
+  searchQuery?: string
   selectedId?: string
   showEdgeLabels?: boolean
 }) {
@@ -40,6 +52,8 @@ export function ThreeNetworkMap({
   const onSelectRef = useRef(onSelect)
   const selectedIdRef = useRef(selectedId)
   const labelsVisibleRef = useRef(true)
+  const searchQueryRef = useRef(searchQuery)
+  const searchMatchIdsRef = useRef<Set<string>>(new Set())
   const reducedMotion = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
   const [error, setError] = useState<string | null>(null)
   const [fullscreen, setFullscreen] = useState(false)
@@ -50,18 +64,21 @@ export function ThreeNetworkMap({
   const pausedRef = useRef(paused)
   const spatial = useMemo(() => layoutNetwork(nodes, edges, mode), [edges, mode, nodes])
   const visibleEdges = useMemo(() => limitNetworkEdges(edges, spatial, mode), [edges, mode, spatial])
+  const searchMatchIds = useMemo(() => new Set(spatial.filter((node) => networkNodeMatchesSearch(node, searchQuery)).map((node) => node.id)), [searchQuery, spatial])
   const selectedNode = selectedId ? spatial.find((node) => node.id === selectedId) : undefined
 
   useEffect(() => { onClearSelectionRef.current = onClearSelection }, [onClearSelection])
   useEffect(() => { onSelectRef.current = onSelect }, [onSelect])
   useEffect(() => { selectedIdRef.current = selectedId }, [selectedId])
   useEffect(() => { labelsVisibleRef.current = labelsVisible }, [labelsVisible])
+  useEffect(() => { searchQueryRef.current = searchQuery; searchMatchIdsRef.current = searchMatchIds }, [searchMatchIds, searchQuery])
   useEffect(() => { pausedRef.current = paused }, [paused])
   useEffect(() => {
-    const update = () => setFullscreen(document.fullscreenElement === containerRef.current)
+    const update = () => setFullscreen(document.fullscreenElement === (fullscreenTargetRef?.current || containerRef.current))
+    update()
     document.addEventListener("fullscreenchange", update)
     return () => document.removeEventListener("fullscreenchange", update)
-  }, [])
+  }, [fullscreenTargetRef])
 
   useEffect(() => {
     const host = hostRef.current
@@ -87,9 +104,11 @@ export function ThreeNetworkMap({
         renderer.domElement.setAttribute("aria-label", `${mode} interactive 3D relationship map`)
         renderer.domElement.setAttribute("role", "img")
         renderer.domElement.style.display = "block"
+        renderer.domElement.style.backgroundColor = "var(--background)"
         renderer.domElement.style.height = "100%"
         renderer.domElement.style.width = "100%"
         host.replaceChildren(renderer.domElement)
+        host.style.backgroundColor = "var(--background)"
 
         const scene = new THREE.Scene()
         const camera = new THREE.PerspectiveCamera(48, 1, 1, 5000)
@@ -260,7 +279,7 @@ export function ThreeNetworkMap({
         renderer.domElement.addEventListener("wheel", wheel, { passive: false })
 
         const worldPosition = new THREE.Vector3()
-        let highlightedFor: string | undefined
+        let styledFor = ""
         let connectedIds = new Set<string>()
         const updateSelection = (selection: string | undefined) => {
           connectedIds = new Set(selection ? [selection] : [])
@@ -279,13 +298,15 @@ export function ThreeNetworkMap({
           highlightGeometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3))
           if (positions.length) highlightGeometry.computeBoundingSphere()
           highlightLines.visible = positions.length > 0
-          lineMaterial.opacity = selection ? baseLineOpacity * 0.5 : baseLineOpacity
+          const searchActive = Boolean(searchQueryRef.current.trim())
+          lineMaterial.opacity = selection || searchActive ? baseLineOpacity * 0.5 : baseLineOpacity
           for (const item of meshes) {
-            const associated = !selection || connectedIds.has(item.node.id)
+            const searchMatch = !searchActive || searchMatchIdsRef.current.has(item.node.id)
+            const associated = (!selection || connectedIds.has(item.node.id)) && searchMatch
             item.mesh.material.color.set(item.color)
-            item.mesh.material.opacity = associated ? item.baseOpacity : Math.max(0.34, item.baseOpacity * 0.46)
+            item.mesh.material.opacity = associated ? item.baseOpacity : searchActive ? Math.max(0.14, item.baseOpacity * 0.2) : Math.max(0.34, item.baseOpacity * 0.46)
           }
-          highlightedFor = selection
+          styledFor = `${selection || ""}\n${searchQueryRef.current}`
         }
         const positionLabels = () => {
           const width = Math.max(1, host.clientWidth)
@@ -293,7 +314,9 @@ export function ThreeNetworkMap({
           group.updateMatrixWorld(true)
           for (const { element, node } of nodeLabels.values()) {
             const neighborhood = connectedIds.has(node.id)
-            const visible = neighborhood || (labelsVisibleRef.current && importantNodeIds.has(node.id))
+            const searchActive = Boolean(searchQueryRef.current.trim())
+            const searchMatch = searchActive && searchMatchIdsRef.current.has(node.id)
+            const visible = searchActive ? searchMatch : neighborhood || (labelsVisibleRef.current && importantNodeIds.has(node.id))
             if (!visible) {
               element.style.display = "none"
               continue
@@ -307,13 +330,13 @@ export function ThreeNetworkMap({
               continue
             }
             element.style.display = "block"
-            element.style.fontWeight = node.id === selectedIdRef.current ? "700" : neighborhood ? "600" : "500"
-            element.style.opacity = neighborhood ? "1" : "0.82"
+            element.style.fontWeight = node.id === selectedIdRef.current ? "700" : neighborhood || searchMatch ? "600" : "500"
+            element.style.opacity = neighborhood || searchMatch ? "1" : "0.82"
             element.style.transform = `translate(-50%, -50%) translate(${(worldPosition.x * 0.5 + 0.5) * width}px, ${(-worldPosition.y * 0.5 + 0.5) * height}px)`
           }
           for (const { edge, element } of edgeLabels.values()) {
             const neighborhood = Boolean(selectedIdRef.current && (edge.source === selectedIdRef.current || edge.target === selectedIdRef.current))
-            const visible = neighborhood || (labelsVisibleRef.current && importantEdgeIds.has(edge.id))
+            const visible = !searchQueryRef.current.trim() && (neighborhood || (labelsVisibleRef.current && importantEdgeIds.has(edge.id)))
             const source = byId.get(edge.source)
             const target = byId.get(edge.target)
             if (!visible || !source || !target) {
@@ -343,9 +366,11 @@ export function ThreeNetworkMap({
           group.rotation.x = pitch
           camera.position.set(0, mode === "neural" ? -8 : -42, cameraZ)
           camera.lookAt(0, 0, 0)
-          if (highlightedFor !== selectedIdRef.current) updateSelection(selectedIdRef.current)
+          const nextStyleKey = `${selectedIdRef.current || ""}\n${searchQueryRef.current}`
+          if (styledFor !== nextStyleKey) updateSelection(selectedIdRef.current)
           for (const item of meshes) {
-            const target = item.node.id === selectedIdRef.current ? item.baseScale * 1.55 : connectedIds.has(item.node.id) ? item.baseScale * 1.18 : item.baseScale
+            const searchMatch = Boolean(searchQueryRef.current.trim()) && searchMatchIdsRef.current.has(item.node.id)
+            const target = item.node.id === selectedIdRef.current ? item.baseScale * 1.55 : connectedIds.has(item.node.id) || searchMatch ? item.baseScale * 1.18 : item.baseScale
             const next = item.mesh.scale.x + (target - item.mesh.scale.x) * 0.16
             item.mesh.scale.setScalar(next)
           }
@@ -397,27 +422,29 @@ export function ThreeNetworkMap({
   }, [colorMode, mode, showEdgeLabels, spatial, visibleEdges])
 
   const toggleFullscreen = async () => {
-    if (!containerRef.current || !document.fullscreenEnabled) return
-    if (document.fullscreenElement === containerRef.current) await document.exitFullscreen()
-    else await containerRef.current.requestFullscreen()
+    const target = fullscreenTargetRef?.current || containerRef.current
+    if (!target || !document.fullscreenEnabled) return
+    if (document.fullscreenElement === target) await document.exitFullscreen()
+    else await target.requestFullscreen()
   }
 
   return (
-    <div className="relative min-h-[34rem] overflow-hidden rounded-lg border bg-background/35 fullscreen:min-h-screen fullscreen:rounded-none fullscreen:border-0 fullscreen:bg-background" ref={containerRef}>
-      <div className="absolute right-3 top-3 z-10 flex gap-1 rounded-md border bg-background/90 p-1 shadow-sm backdrop-blur">
-        <Button aria-label={paused ? "Resume rotation" : "Pause rotation"} onClick={() => setPaused((value) => !value)} size="icon" variant="ghost">{paused ? <Play /> : <Pause />}</Button>
-        <Button aria-label="Reset 3D view" onClick={() => controlsRef.current?.reset()} size="icon" variant="ghost"><RotateCcw /></Button>
-        <Button aria-label={`Color by ${colorMode === "type" ? (mode === "graph" ? "source" : "category") : "type"}`} onClick={() => onColorModeChange(colorMode === "type" ? "category" : "type")} size="sm" title={`Currently colored by ${networkColorModeLabel(mode, colorMode).toLowerCase()}`} variant="ghost"><Palette /><span className="hidden lg:inline">{networkColorModeLabel(mode, colorMode)}</span></Button>
-        <Button aria-label={labelsVisible ? "Hide priority labels" : "Show priority labels"} aria-pressed={labelsVisible} onClick={() => setLabelsVisible((value) => !value)} size="icon" title="Labels prioritize larger and more connected nodes; selected neighborhoods are always labeled." variant={labelsVisible ? "secondary" : "ghost"}><Tags /></Button>
-        {document.fullscreenEnabled ? <Button aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"} onClick={() => void toggleFullscreen()} size="icon" variant="ghost">{fullscreen ? <Minimize2 /> : <Maximize2 />}</Button> : null}
+    <div className={`relative min-h-[34rem] overflow-hidden rounded-lg border bg-background/35 fullscreen:min-h-screen fullscreen:rounded-none fullscreen:border-0 fullscreen:bg-background ${fullscreen ? "min-h-screen rounded-none border-0 bg-background" : ""}`} ref={containerRef}>
+      {onDimensionChange ? <div className="absolute left-3 top-3 z-40"><NetworkDimensionTabs dimension={dimension} onChange={onDimensionChange} /></div> : null}
+      <div className="absolute right-3 top-3 z-40 flex gap-1 rounded-md border bg-background/90 p-1 shadow-sm backdrop-blur">
+        {onSearchQueryChange ? <NetworkSearchControl matchCount={searchMatchIds.size} onChange={onSearchQueryChange} query={searchQuery} /> : null}
+        <CanvasTooltip label={paused ? "Resume rotation" : "Pause rotation"}><Button aria-label={paused ? "Resume rotation" : "Pause rotation"} onClick={() => setPaused((value) => !value)} size="icon" variant="ghost">{paused ? <Play /> : <Pause />}</Button></CanvasTooltip>
+        <CanvasTooltip label="Reset 3D view"><Button aria-label="Reset 3D view" onClick={() => controlsRef.current?.reset()} size="icon" variant="ghost"><RotateCcw /></Button></CanvasTooltip>
+        <CanvasTooltip label={labelsVisible ? "Hide priority labels" : "Show priority labels"}><Button aria-label={labelsVisible ? "Hide priority labels" : "Show priority labels"} aria-pressed={labelsVisible} onClick={() => setLabelsVisible((value) => !value)} size="icon" variant={labelsVisible ? "secondary" : "ghost"}><Tags /></Button></CanvasTooltip>
+        {document.fullscreenEnabled ? <CanvasTooltip label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"}><Button aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"} onClick={() => void toggleFullscreen()} size="icon" variant="ghost">{fullscreen ? <Minimize2 /> : <Maximize2 />}</Button></CanvasTooltip> : null}
       </div>
       <div className={fullscreen ? "h-screen" : "h-[34rem]"} ref={hostRef} />
       {loading ? <div className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-muted-foreground">Preparing the 3D map…</div> : null}
       {error ? <div className="absolute inset-0 grid place-items-center px-8 text-center"><p className="max-w-md text-sm leading-6 text-muted-foreground">3D view unavailable: {error}. The 2D view remains available.</p></div> : null}
       {hoverTip ? <div className="pointer-events-none absolute z-20 max-w-64 rounded-md border bg-popover/95 px-2.5 py-2 text-xs shadow-lg backdrop-blur" style={{ left: Math.max(8, Math.min(hoverTip.x, (containerRef.current?.clientWidth || 320) - 270)), top: Math.max(8, Math.min(hoverTip.y, (containerRef.current?.clientHeight || 320) - 72)) }}><p className="truncate font-medium text-popover-foreground">{hoverTip.label}</p><p className="mt-0.5 truncate text-muted-foreground">{hoverTip.detail}</p></div> : null}
-      {fullscreen && fullscreenPanel ? <div className="absolute inset-x-4 bottom-4 z-10 max-h-[44vh] overflow-auto rounded-lg border bg-background/94 p-5 shadow-2xl backdrop-blur-xl md:inset-y-16 md:left-auto md:w-[23rem] md:max-h-none">{fullscreenPanel}</div> : null}
+      {fullscreen && selectedNode && fullscreenPanel ? <FullscreenInspectorPanel onClose={() => onClearSelection?.()}>{fullscreenPanel}</FullscreenInspectorPanel> : null}
       {selectedNode && !fullscreenPanel ? <div className="pointer-events-none absolute bottom-4 left-4 max-w-sm border-l-2 border-primary bg-background/90 px-4 py-3 text-sm shadow-lg backdrop-blur"><p className="font-semibold">{selectedNode.label}</p><p className="mt-1 text-xs text-muted-foreground">{selectedNode.kind || "entity"}{selectedNode.category ? ` · ${selectedNode.category}` : ""} · {selectedNode.degree} connections</p></div> : null}
-      <NetworkLegend colorMode={colorMode} mode={mode} nodes={nodes} />
+      <NetworkLegend colorMode={colorMode} mode={mode} nodes={nodes} onColorModeChange={onColorModeChange} />
       <p className="pointer-events-none absolute bottom-3 right-3 hidden text-xs text-muted-foreground sm:block">Drag to orbit · scroll to zoom · select a node to inspect</p>
     </div>
   )

@@ -209,6 +209,143 @@ def test_config_post_updates_server_and_database_settings(tmp_path, monkeypatch)
         server.close()
 
 
+def test_remote_control_plane_is_denied_while_auth_is_disabled(tmp_path, monkeypatch):
+    monkeypatch.setattr(Handler, '_client_is_loopback', lambda self: False)
+    server = ServerHarness(tmp_path, monkeypatch)
+    try:
+        status, _headers, body = _request(f"{server.base}/api/auth/status")
+        assert status == 200
+        assert json.loads(body)["can_backup"] is False
+
+        status, _headers, body = _request(
+            f"{server.base}/api/config",
+            method="POST",
+            body={"auth_enabled": True, "password": "attacker", "memory_admin_enabled": True},
+        )
+        assert status == 403
+        assert b"localhost or password authentication" in body
+
+        status, _headers, body = _request(f"{server.base}/api/admin/backup", method="POST", body={})
+        assert status == 403
+        assert b"localhost or password authentication" in body
+
+        status, _headers, body = _request(
+            f"{server.base}/api/databases/select",
+            method="POST",
+            body={"path": str(server.db)},
+        )
+        assert status == 403
+        assert b"localhost or password authentication" in body
+    finally:
+        server.close()
+
+
+def test_authenticated_remote_control_plane_remains_available(tmp_path, monkeypatch):
+    server = ServerHarness(tmp_path, monkeypatch)
+    try:
+        remote_db = tmp_path / "hermes" / "profiles" / "developer" / "mnemosyne" / "data" / "mnemosyne.db"
+        make_db(_mkparents(remote_db))
+        status, _headers, _body = _request(
+            f"{server.base}/api/config",
+            method="POST",
+            body={"host": "0.0.0.0", "auth_enabled": True, "password": "correct horse battery staple"},
+        )
+        assert status == 200
+
+        monkeypatch.setattr(Handler, "_client_is_loopback", lambda self: False)
+        status, headers, body = _request(
+            f"{server.base}/api/auth/login",
+            method="POST",
+            body={"password": "correct horse battery staple"},
+        )
+        assert status == 200
+        assert json.loads(body)["can_backup"] is True
+        cookie = headers["Set-Cookie"].split(";", 1)[0]
+
+        status, _headers, body = _request(
+            f"{server.base}/api/admin/backup",
+            method="POST",
+            body={},
+            headers={"Cookie": cookie},
+        )
+        assert status == 200
+        assert Path(json.loads(body)["backup"]["path"]).exists()
+
+        status, _headers, body = _request(
+            f"{server.base}/api/databases/select",
+            method="POST",
+            body={"path": str(remote_db)},
+            headers={"Cookie": cookie},
+        )
+        assert status == 200
+        assert json.loads(body)["active"] == _resolved(remote_db)
+
+        status, _headers, body = _request(
+            f"{server.base}/api/config",
+            method="POST",
+            body={"port": 8766},
+            headers={"Cookie": cookie},
+        )
+        assert status == 200
+        assert json.loads(body)["config"]["port"] == 8766
+    finally:
+        server.close()
+
+
+def test_local_backup_does_not_require_memory_admin_and_is_audited(tmp_path, monkeypatch):
+    server = ServerHarness(tmp_path, monkeypatch)
+    try:
+        status, _headers, body = _request(f"{server.base}/api/auth/status")
+        assert status == 200
+        assert json.loads(body)["can_backup"] is True
+
+        status, _headers, body = _request(f"{server.base}/api/admin/backup", method="POST", body={})
+        payload = json.loads(body)
+        assert status == 200
+        assert Path(payload["backup"]["path"]).exists()
+
+        status, _headers, body = _request(f"{server.base}/api/admin/audit")
+        assert status == 200
+        assert json.loads(body)["items"][0]["action"] == "backup"
+    finally:
+        server.close()
+
+
+def test_bulk_memory_endpoint_is_all_or_none_with_one_backup(tmp_path, monkeypatch):
+    server = ServerHarness(tmp_path, monkeypatch)
+    try:
+        status, _headers, _body = _request(
+            f"{server.base}/api/config",
+            method="POST",
+            body={"host": "127.0.0.1", "memory_admin_enabled": True},
+        )
+        assert status == 200
+
+        status, _headers, body = _request(
+            f"{server.base}/api/admin/memory/bulk",
+            method="POST",
+            body={"memory_ids": ["w1", "w2"], "action": "importance", "value": 0.72},
+        )
+        payload = json.loads(body)
+        assert status == 200
+        assert payload["count"] == 2
+        assert Path(payload["backup"]["path"]).exists()
+        assert len(list(Path(payload["backup"]["path"]).parent.glob("*.db"))) == 1
+
+        status, _headers, body = _request(
+            f"{server.base}/api/admin/memory/bulk",
+            method="POST",
+            body={"memory_ids": ["w1", "missing"], "action": "importance", "value": 0.2},
+        )
+        assert status == 400
+        assert b"memory not found" in body
+        status, _headers, body = _request(f"{server.base}/api/memory?id=w1")
+        assert json.loads(body)["item"]["importance"] == 0.72
+        assert len(list(Path(payload["backup"]["path"]).parent.glob("*.db"))) == 1
+    finally:
+        server.close()
+
+
 
 def test_admin_memory_mutation_endpoints_allow_localhost_admin_without_auth_and_audit(tmp_path, monkeypatch):
     server = ServerHarness(tmp_path, monkeypatch)
@@ -321,6 +458,13 @@ def test_databases_select_hot_swaps_active_brain(tmp_path, monkeypatch):
         assert payload["ok"] is True
         assert payload["active"] == _resolved(pm)
         assert payload["persisted"] is False
+
+        status, _headers, body = _request(f"{server.base}/api/admin/audit")
+        assert status == 200
+        selection = json.loads(body)["items"][0]
+        assert selection["action"] == "database_select"
+        assert selection["before"]["path"] == str(server.db)
+        assert selection["after"]["path"] == _resolved(pm)
 
         status, _headers, body = _request(f"{server.base}/api/stats")
         assert json.loads(body)["counts"]["working_memory"] == 5

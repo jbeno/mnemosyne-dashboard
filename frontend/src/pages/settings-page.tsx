@@ -15,7 +15,7 @@ import { formatDate } from "@/lib/utils"
 
 type ConfigForm = Pick<DashboardConfig, "host" | "port" | "db_path" | "auth_enabled" | "memory_admin_enabled"> & { password: string }
 
-export function SettingsPage({ databaseKey, onAuthStatusChange }: { databaseKey: string; onAuthStatusChange: () => Promise<void> }) {
+export function SettingsPage({ backupAllowed, configureAllowed, databaseKey, onAuthStatusChange }: { backupAllowed: boolean; configureAllowed: boolean; databaseKey: string; onAuthStatusChange: () => Promise<void> }) {
   const [config, setConfig] = useState<DashboardConfig | null>(null)
   const [form, setForm] = useState<ConfigForm | null>(null)
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null)
@@ -26,6 +26,7 @@ export function SettingsPage({ databaseKey, onAuthStatusChange }: { databaseKey:
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [confirmClearPassword, setConfirmClearPassword] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -33,11 +34,11 @@ export function SettingsPage({ databaseKey, onAuthStatusChange }: { databaseKey:
     try {
       const [configResponse, nextDiagnostics, nextRuntime, nextRealtime] = await Promise.all([dashboardApi.config(), dashboardApi.diagnostics(), dashboardApi.runtimeStatus(), dashboardApi.realtimeStatus()])
       setConfig(configResponse.config)
-      setForm({ host: configResponse.config.host, port: configResponse.config.port, db_path: configResponse.config.db_path, auth_enabled: configResponse.config.auth_enabled, memory_admin_enabled: configResponse.config.memory_admin_enabled, password: "" })
+      setForm(configForm(configResponse.config))
       setDiagnostics(nextDiagnostics)
       setRuntime(nextRuntime)
       setRealtime(nextRealtime)
-      if (configResponse.config.memory_admin_enabled) {
+      if (backupAllowed || configResponse.config.memory_admin_enabled) {
         const auditResponse = await dashboardApi.audit().catch(() => ({ items: [] as AuditEntry[] }))
         setAudit(auditResponse.items)
       } else setAudit([])
@@ -46,7 +47,7 @@ export function SettingsPage({ databaseKey, onAuthStatusChange }: { databaseKey:
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [backupAllowed])
 
   useEffect(() => { void load() }, [databaseKey, load])
 
@@ -60,13 +61,34 @@ export function SettingsPage({ databaseKey, onAuthStatusChange }: { databaseKey:
       if (form.password) updates.password = form.password
       const response = await dashboardApi.saveConfig(updates)
       setConfig(response.config)
-      setForm((current) => current ? { ...current, password: "" } : current)
+      setForm(configForm(response.config))
+      setConfirmClearPassword(false)
       setMessage(response.message)
-      if (response.config.memory_admin_enabled) setAudit((await dashboardApi.audit().catch(() => ({ items: [] as AuditEntry[] }))).items)
+      if (backupAllowed || response.config.memory_admin_enabled) setAudit((await dashboardApi.audit().catch(() => ({ items: [] as AuditEntry[] }))).items)
       else setAudit([])
       await onAuthStatusChange()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Settings could not be saved.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const clearPassword = async () => {
+    if (!confirmClearPassword) { setConfirmClearPassword(true); return }
+    setSaving(true)
+    setMessage(null)
+    setError(null)
+    try {
+      const response = await dashboardApi.saveConfig({ clear_password: true })
+      setConfig(response.config)
+      setForm(configForm(response.config))
+      setConfirmClearPassword(false)
+      setMessage("Password authentication was disabled and the stored password was cleared.")
+      if (backupAllowed || response.config.memory_admin_enabled) setAudit((await dashboardApi.audit().catch(() => ({ items: [] as AuditEntry[] }))).items)
+      await onAuthStatusChange()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The stored password could not be cleared.")
     } finally {
       setSaving(false)
     }
@@ -103,25 +125,27 @@ export function SettingsPage({ databaseKey, onAuthStatusChange }: { databaseKey:
         <TabsList aria-label="Settings section"><TabsTrigger value="general">General</TabsTrigger><TabsTrigger value="maintenance">Maintenance</TabsTrigger><TabsTrigger value="diagnostics">Diagnostics</TabsTrigger><TabsTrigger value="realtime">Realtime</TabsTrigger></TabsList>
         <TabsContent className="pt-7" value="general">
           <form className="max-w-4xl space-y-9" onSubmit={(event) => { event.preventDefault(); void save() }}>
-            <fieldset className="grid gap-5 sm:grid-cols-2">
+            {!configureAllowed ? <p className="border-l-2 border-primary/45 bg-primary/5 px-4 py-3 text-sm">Configuration changes require a localhost connection or password-authenticated access.</p> : null}
+            <fieldset className="grid gap-5 sm:grid-cols-2" disabled={!configureAllowed || saving}>
               <legend className="mb-4 text-lg font-semibold">Server & database</legend>
               <Field label="Bind host"><Input onChange={(event) => setFormValue(setForm, "host", event.target.value)} required value={form?.host || ""} /></Field>
               <Field label="Port"><Input max={65535} min={1} onChange={(event) => setFormValue(setForm, "port", Number(event.target.value))} required type="number" value={form?.port || ""} /></Field>
               <Field className="sm:col-span-2" description="Changing this setting requires a dashboard restart. Use the profile selector in the header for a temporary switch." label="Default database path"><Input onChange={(event) => setFormValue(setForm, "db_path", event.target.value)} required value={form?.db_path || ""} /></Field>
             </fieldset>
 
-            <fieldset className="space-y-4 border-t pt-7">
+            <fieldset className="space-y-4 border-t pt-7" disabled={!configureAllowed || saving}>
               <legend className="text-lg font-semibold">Access & maintenance</legend>
               <CheckField checked={Boolean(form?.auth_enabled)} description="Require the dashboard password before serving memory data." label="Password authentication" onChange={(checked) => setFormValue(setForm, "auth_enabled", checked)} />
               <Field description={config?.has_password ? "A password is already configured. Enter a value only to replace it." : "Set a dashboard password before exposing the server beyond localhost."} label="New password"><Input autoComplete="new-password" onChange={(event) => setFormValue(setForm, "password", event.target.value)} placeholder={config?.has_password ? "Leave blank to keep current password" : "Enter a strong local password"} type="password" value={form?.password || ""} /></Field>
+              {config?.has_password ? <div className="flex flex-wrap items-center gap-3"><Button disabled={saving || !configureAllowed} onClick={() => void clearPassword()} type="button" variant={confirmClearPassword ? "destructive" : "outline"}>{confirmClearPassword ? "Confirm disable & clear" : "Disable auth & clear password"}</Button>{confirmClearPassword ? <Button disabled={saving} onClick={() => setConfirmClearPassword(false)} type="button" variant="ghost">Cancel</Button> : null}<span className="text-xs leading-5 text-muted-foreground">This removes the stored hash and invalidates the current authentication cookie.</span></div> : null}
               <CheckField checked={Boolean(form?.memory_admin_enabled)} description="Allows write operations that invalidate or alter memory. Keep this off for normal inspection." label="Memory admin mode" onChange={(checked) => setFormValue(setForm, "memory_admin_enabled", checked)} />
             </fieldset>
 
-            <div className="flex flex-wrap gap-3"><Button disabled={saving || !form} type="submit">{saving ? "Saving…" : "Save settings"}</Button><Button disabled={saving || !config?.memory_admin_enabled} onClick={() => void backup()} type="button" variant="outline"><DatabaseBackup />Create database backup</Button></div>
+            <div className="flex flex-wrap items-center gap-3"><Button disabled={saving || !form || !configureAllowed} type="submit">{saving ? "Saving…" : "Save settings"}</Button><Button disabled={saving || !backupAllowed} onClick={() => void backup()} type="button" variant="outline"><DatabaseBackup />Create database backup</Button>{!backupAllowed ? <span className="text-xs text-muted-foreground">Backups require localhost or password-authenticated access.</span> : null}</div>
           </form>
         </TabsContent>
         <TabsContent className="pt-7" value="maintenance">
-          <section className="max-w-5xl"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><h2 className="text-lg font-semibold">Audited memory maintenance</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">Every trust, importance, expiry, invalidation, and supersession action is appended to the local audit log. Database backups remain the default.</p></div><Button disabled={saving || !config?.memory_admin_enabled} onClick={() => void backup()} type="button" variant="outline"><DatabaseBackup />Create database backup</Button></div>{!config?.memory_admin_enabled ? <p className="mt-6 border-l-2 border-primary/45 bg-primary/5 px-4 py-3 text-sm">Memory admin mode is disabled. Enable it under General only when maintenance is intentional.</p> : <><div className="mt-8 flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">Recent audit activity</h3><span className="text-xs tabular-nums text-muted-foreground">{audit.length} entries</span></div><Table className="mt-3"><TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Action</TableHead><TableHead>Memory</TableHead><TableHead>Result</TableHead></TableRow></TableHeader><TableBody>{audit.map((entry, index) => <TableRow key={`${entry.timestamp || "audit"}-${index}`}><TableCell className="whitespace-nowrap text-muted-foreground">{formatDate(entry.timestamp)}</TableCell><TableCell><Badge variant="outline">{entry.action || "record"}</Badge></TableCell><TableCell className="max-w-56 truncate font-mono text-xs">{entry.memory_id || "—"}</TableCell><TableCell className="max-w-lg truncate text-muted-foreground">{auditResult(entry)}</TableCell></TableRow>)}</TableBody></Table>{!audit.length ? <p className="border-t py-8 text-sm text-muted-foreground">No audited maintenance actions have been recorded.</p> : null}</>}</section>
+          <section className="max-w-5xl"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><h2 className="text-lg font-semibold">Audited memory maintenance</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">Configuration changes, database selection, backups, and every trust, importance, expiry, invalidation, and supersession action are appended to the local audit log. Memory mutations create one verified SQLite backup by default.</p></div><Button disabled={saving || !backupAllowed} onClick={() => void backup()} type="button" variant="outline"><DatabaseBackup />Create database backup</Button></div>{!config?.memory_admin_enabled ? <p className="mt-6 border-l-2 border-primary/45 bg-primary/5 px-4 py-3 text-sm">Memory admin mode is disabled. Backups remain available when authorized; enable admin mode under General only when record maintenance is intentional.</p> : null}{backupAllowed || config?.memory_admin_enabled ? <><div className="mt-8 flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">Recent audit activity</h3><span className="text-xs tabular-nums text-muted-foreground">{audit.length} entries</span></div><Table className="mt-3"><TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Action</TableHead><TableHead>Memory</TableHead><TableHead>Result</TableHead></TableRow></TableHeader><TableBody>{audit.map((entry, index) => <TableRow key={`${entry.timestamp || "audit"}-${index}`}><TableCell className="whitespace-nowrap text-muted-foreground">{formatDate(entry.timestamp)}</TableCell><TableCell><Badge variant="outline">{entry.action || "record"}</Badge></TableCell><TableCell className="max-w-56 truncate font-mono text-xs">{entry.memory_id || "—"}</TableCell><TableCell className="max-w-lg truncate text-muted-foreground">{auditResult(entry)}</TableCell></TableRow>)}</TableBody></Table>{!audit.length ? <p className="border-t py-8 text-sm text-muted-foreground">No audited maintenance actions have been recorded.</p> : null}</> : null}</section>
         </TabsContent>
         <TabsContent className="pt-7" value="diagnostics">
           <div className="grid gap-10 xl:grid-cols-2">
@@ -150,6 +174,10 @@ function setFormValue<K extends keyof ConfigForm>(setForm: React.Dispatch<React.
   setForm((current) => current ? { ...current, [key]: value } : current)
 }
 
+function configForm(config: DashboardConfig): ConfigForm {
+  return { host: config.host, port: config.port, db_path: config.db_path, auth_enabled: config.auth_enabled, memory_admin_enabled: config.memory_admin_enabled, password: "" }
+}
+
 function yesNo(value: boolean | undefined) { return value === undefined ? "—" : value ? "Yes" : "No" }
 function formatBytes(value: number) { if (!value) return "0 B"; const units = ["B", "KB", "MB", "GB"]; const order = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1); return `${(value / 1024 ** order).toFixed(order ? 1 : 0)} ${units[order]}` }
-function auditResult(entry: AuditEntry) { const extra = entry.extra || {}; if (extra.replacement_id) return `Replacement ${String(extra.replacement_id)}`; if (extra.veracity) return `Trust ${String(extra.veracity)}`; if (extra.importance !== undefined) return `Importance ${Number(extra.importance).toFixed(2)}`; if (extra.valid_until !== undefined) return extra.valid_until ? `Expiry ${String(extra.valid_until)}` : "Expiry cleared"; const backup = extra.backup as { path?: string } | null | undefined; return backup?.path ? `Backup ${backup.path}` : entry.raw || "Completed" }
+function auditResult(entry: AuditEntry) { const extra = entry.extra || {}; if (entry.action === "database_select" && entry.after?.path) return `Selected ${String(entry.after.path)}`; if (Array.isArray(extra.changed_fields)) return `Changed ${extra.changed_fields.join(", ") || "no public fields"}`; if (extra.count !== undefined) return `${Number(extra.count).toLocaleString()} memories`; if (extra.replacement_id) return `Replacement ${String(extra.replacement_id)}`; if (extra.veracity) return `Trust ${String(extra.veracity)}`; if (extra.importance !== undefined) return `Importance ${Number(extra.importance).toFixed(2)}`; if (extra.valid_until !== undefined) return extra.valid_until ? `Expiry ${String(extra.valid_until)}` : "Expiry cleared"; const backup = extra.backup as { path?: string } | null | undefined; return backup?.path ? `Backup ${backup.path}` : entry.raw || "Completed" }

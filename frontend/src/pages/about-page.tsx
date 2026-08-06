@@ -16,7 +16,7 @@ export function AboutPage() {
         <div className="max-w-xl space-y-6 py-2">
           <div>
             <p className="eyebrow mb-2">Version</p>
-            <p className="text-2xl font-semibold">0.15.0 pre-release</p>
+            <p className="text-2xl font-semibold">0.15.0</p>
           </div>
           <div className="border-t pt-6">
             <h2 className="text-lg font-semibold">Maintained fork</h2>

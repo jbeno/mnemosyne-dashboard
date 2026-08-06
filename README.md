@@ -166,7 +166,7 @@ auto-discovered personal Mnemosyne database.
   - Structured-facts table with temporal, episodic, and MEMORIA source badges
 - Optional password authentication, configurable from the Settings tab
 - Password-gated memory maintenance mode with supersede, expire/invalidate, and importance update actions
-- Automatic SQLite backups and JSONL audit log for admin memory mutations
+- Verified WAL-safe SQLite backups and a private JSONL audit log for configuration changes, database selection, backups, and admin memory mutations
 - Switch between multiple Mnemosyne databases (for example per-profile brains) from the global desktop or mobile selector without restarting the server
 - Editable Settings fields for bind address, port, and Mnemosyne database path
 - Database diagnostics for install health: path, readability, file size, modified time, tables, row counts, and copyable diagnostics
@@ -182,11 +182,13 @@ auto-discovered personal Mnemosyne database.
 - Binds to `0.0.0.0` by default so the dashboard is reachable on your LAN
 - Reports a localhost URL for same-machine access and a LAN URL when one is detectable
 - Browsing opens the Mnemosyne SQLite database with `mode=ro`
-- The database selector only switches between a fixed set of databases (discovered Hermes brains, the active database, and any listed in `db_paths`); other paths are rejected, switching uses the same auth as other state-changing requests, and every database is still opened read-only (`mode=ro`)
+- The database selector only switches between a fixed set of databases (discovered Hermes brains, the active database, and any listed in `db_paths`); other paths are rejected, switching requires localhost or password-authenticated access, and every database is still opened read-only (`mode=ro`)
 - Localhost-only memory admin can be enabled without password for developer convenience; LAN/non-local admin mode requires password auth before mutation endpoints work
+- Configuration changes and manual backups require localhost or password-authenticated access even when normal read-only browsing does not require a password
 - Admin actions are limited to Mnemosyne-aligned supersede, expire/invalidate, and importance updates
 - Raw memory content overwrite and hard delete endpoints are intentionally not exposed
-- Admin mutations create a SQLite backup by default and append to `audit.jsonl`
+- Admin mutations create one integrity-checked SQLite online backup per operation or bulk transaction and append to `audit.jsonl`
+- Config, audit, and backup storage under `~/.hermes/plugin-data/mnemosyne-dashboard/` uses owner-only permissions; backups are created with SQLite's online backup API so committed WAL data is included
 - Optional password auth is disabled by default and can be enabled from Settings
 - No external JavaScript or CSS dependencies
 - Runtime state lives under `~/.hermes/plugin-data/mnemosyne-dashboard/`

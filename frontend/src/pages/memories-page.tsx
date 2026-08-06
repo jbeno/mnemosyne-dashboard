@@ -101,13 +101,13 @@ export function MemoriesPage({ adminEnabled, stats, databaseKey, searchRequest =
       />
 
       <form
-        className="flex flex-col gap-3 sm:flex-row sm:flex-wrap"
+        className="flex flex-col gap-3 sm:flex-row sm:flex-wrap xl:grid xl:grid-cols-[minmax(10rem,1fr)_repeat(5,minmax(6rem,8rem))_minmax(6.5rem,9rem)_auto]"
         onSubmit={(event) => {
           event.preventDefault()
           apply()
         }}
       >
-        <div className="relative w-full sm:min-w-72 sm:flex-[1_1_22rem]">
+        <div className="relative w-full sm:min-w-56 sm:flex-[1_1_16rem] xl:min-w-0">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input aria-label="Search memory content" className="pl-9" onChange={(event) => update("q", event.target.value)} placeholder="Search content, ID, or session…" value={filters.q} />
         </div>
@@ -116,7 +116,7 @@ export function MemoriesPage({ adminEnabled, stats, databaseKey, searchRequest =
         <FilterSelect label="Sort" onChange={(value) => update("sort", value)} options={[['recent','Most recent'],['oldest','Oldest'],['importance','Importance'],['recall','Recall count']]} value={filters.sort} />
         <FilterSelect label="Source" onChange={(value) => update("source", value)} options={[['all','All sources'],...(stats?.by_source || []).map((row) => [row.source || 'unknown', row.source || 'Unknown'] as [string,string])]} value={filters.source} />
         <FilterSelect label="Scope" onChange={(value) => update("scope", value)} options={[['all','All scopes'],...(stats?.by_scope || []).map((row) => [row.scope || 'unknown', row.scope || 'Unknown'] as [string,string])]} value={filters.scope} />
-        <FilterSelect className="sm:w-44" label="Trust or lifecycle" onChange={(value) => update("trust", value)} options={[['all','Any trust'],['non-stated','Non-stated'],['veracity:stated','Stated'],['veracity:tool','Tool'],['veracity:unknown','Unknown'],['degraded','Degraded'],['due','Due lifecycle']]} value={filters.trust} />
+        <FilterSelect className="sm:w-40" label="Trust or lifecycle" onChange={(value) => update("trust", value)} options={[['all','Any trust'],['non-stated','Non-stated'],['veracity:stated','Stated'],['veracity:tool','Tool'],['veracity:unknown','Unknown'],['degraded','Degraded'],['due','Due lifecycle']]} value={filters.trust} />
         <Button className="w-full sm:w-auto" disabled={loading} type="submit">Apply</Button>
       </form>
 
@@ -136,7 +136,7 @@ export function MemoriesPage({ adminEnabled, stats, databaseKey, searchRequest =
 function FilterSelect({ className = "", label, value, onChange, options }: { className?: string; label: string; value: string; onChange: (value: string) => void; options: Array<[string,string]> }) {
   return (
     <Select onValueChange={onChange} value={value}>
-      <SelectTrigger aria-label={label} className={`w-full sm:w-40 ${className}`}><SelectValue /></SelectTrigger>
+      <SelectTrigger aria-label={label} className={`w-full sm:w-36 xl:w-full ${className}`}><SelectValue /></SelectTrigger>
       <SelectContent>{options.map(([optionValue, optionLabel]) => <SelectItem key={optionValue} value={optionValue}>{optionLabel}</SelectItem>)}</SelectContent>
     </Select>
   )
