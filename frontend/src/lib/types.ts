@@ -54,7 +54,7 @@ export type CanonicalData = { items: JsonRecord[]; stats: CanonicalStats }
 export type ConstellationData = GraphData & { clusters: Array<{ label: string; count: number }> }
 
 export type DashboardConfig = { host: string; port: number; db_path: string; auth_enabled: boolean; has_password: boolean; bind_url: string; local_url: string; lan_url: string; memory_admin_enabled: boolean; db_paths: string[] }
-export type AuthStatus = { version: string; auth_enabled: boolean; has_password: boolean; authenticated: boolean; config: DashboardConfig }
+export type AuthStatus = { version: string; auth_enabled: boolean; has_password: boolean; authenticated: boolean; can_backup: boolean; can_configure: boolean; can_select_database: boolean; config: DashboardConfig }
 export type AuditEntry = { timestamp?: string; action?: string; memory_id?: string; before?: JsonRecord | null; after?: JsonRecord | null; extra?: JsonRecord; raw?: string }
 export type Diagnostics = { db_path: string; exists: boolean; readable: boolean; read_only: boolean; size_bytes: number; modified_at: string; tables: string[]; table_counts: Record<string, number>; missing_expected_tables?: string[]; table_errors?: Record<string, string>; ok: boolean; error?: string }
 export type RuntimeStatus = { ok: boolean; running: boolean; reachable: boolean; pid?: number; pid_file_pid?: number; listener_pids: number[]; stale_pid: boolean; runtime_stale: boolean; runtime_source: string; started_at?: number; probe: { status?: number; url?: string; error?: string }; config: DashboardConfig }

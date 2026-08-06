@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { Box, Map as MapIcon, Search } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Search } from "lucide-react"
 
 import { KeyValueList } from "@/components/key-value-list"
 import { MetricStrip } from "@/components/metric-strip"
@@ -19,12 +19,14 @@ import { cn, formatDate } from "@/lib/utils"
 export function KnowledgeGraphPage({ databaseKey }: { databaseKey: string }) {
   const [colorMode, setColorMode] = useState<NetworkColorMode>("category")
   const [dimension, setDimension] = useState<"2d" | "3d">("2d")
+  const [canvasSearchQuery, setCanvasSearchQuery] = useState("")
   const [query, setQuery] = useState("")
   const [graph, setGraph] = useState<GraphData>({ nodes: [], edges: [] })
   const [triples, setTriples] = useState<Triple[]>([])
   const [selected, setSelected] = useState<GraphNode | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const canvasFrameRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(async (search: string) => {
     setLoading(true)
@@ -41,7 +43,7 @@ export function KnowledgeGraphPage({ databaseKey }: { databaseKey: string }) {
     }
   }, [])
 
-  useEffect(() => { setQuery(""); void load("") }, [databaseKey, load])
+  useEffect(() => { setQuery(""); setCanvasSearchQuery(""); void load("") }, [databaseKey, load])
   const connected = useMemo(() => selected ? graph.edges.filter((edge) => edge.source === selected.id || edge.target === selected.id) : [], [graph.edges, selected])
   const linkedNodeCount = useMemo(() => {
     const degree = new Map<string, number>()
@@ -68,14 +70,10 @@ export function KnowledgeGraphPage({ databaseKey }: { databaseKey: string }) {
       <Tabs defaultValue="map">
         <TabsList aria-label="Knowledge graph view"><TabsTrigger value="map">Relationship map</TabsTrigger><TabsTrigger value="facts">Facts table</TabsTrigger></TabsList>
         <TabsContent className="pt-6" value="map">
-          <div className="mb-4 flex items-center justify-end gap-2">
-            <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">View</span>
-            <Tabs onValueChange={(value) => setDimension(value as typeof dimension)} value={dimension}>
-              <TabsList aria-label="Knowledge graph dimension" variant="default"><TabsTrigger value="2d"><MapIcon />2D</TabsTrigger><TabsTrigger value="3d"><Box />3D</TabsTrigger></TabsList>
-            </Tabs>
-          </div>
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
-            {dimension === "3d" ? <ThreeNetworkMap colorMode={colorMode} edges={graph.edges} fullscreenPanel={<KnowledgeInspector connected={connected} selected={selected} />} mode="graph" nodes={graph.nodes} onClearSelection={() => setSelected(null)} onColorModeChange={setColorMode} onSelect={setSelected} selectedId={selected?.id} showEdgeLabels /> : <NetworkMap colorMode={colorMode} edges={graph.edges} emptyMessage="No structured knowledge relationships match this filter. Mnemosyne populates this map from temporal triples, episodic graph facts, and MEMORIA relationships." fullscreenPanel={<KnowledgeInspector connected={connected} selected={selected} />} mode="graph" nodes={graph.nodes} onClearSelection={() => setSelected(null)} onColorModeChange={setColorMode} onSelect={setSelected} selectedId={selected?.id} showEdgeLabels />}
+            <div className="bg-background fullscreen:bg-background" ref={canvasFrameRef}>
+              {dimension === "3d" ? <ThreeNetworkMap colorMode={colorMode} dimension={dimension} edges={graph.edges} fullscreenPanel={<KnowledgeInspector connected={connected} selected={selected} />} fullscreenTargetRef={canvasFrameRef} mode="graph" nodes={graph.nodes} onClearSelection={() => setSelected(null)} onColorModeChange={setColorMode} onDimensionChange={setDimension} onSearchQueryChange={setCanvasSearchQuery} onSelect={setSelected} searchQuery={canvasSearchQuery} selectedId={selected?.id} showEdgeLabels /> : <NetworkMap colorMode={colorMode} dimension={dimension} edges={graph.edges} emptyMessage="No structured knowledge relationships match this filter. Mnemosyne populates this map from temporal triples, episodic graph facts, and MEMORIA relationships." fullscreenPanel={<KnowledgeInspector connected={connected} selected={selected} />} fullscreenTargetRef={canvasFrameRef} mode="graph" nodes={graph.nodes} onClearSelection={() => setSelected(null)} onColorModeChange={setColorMode} onDimensionChange={setDimension} onSearchQueryChange={setCanvasSearchQuery} onSelect={setSelected} searchQuery={canvasSearchQuery} selectedId={selected?.id} showEdgeLabels />}
+            </div>
             <KnowledgeInspector className="border-t pt-5 xl:border-l xl:border-t-0 xl:pl-6" connected={connected} selected={selected} />
           </div>
         </TabsContent>

@@ -4,6 +4,8 @@ import sys
 import tomllib
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
@@ -171,6 +173,48 @@ def test_stats_counts_memory_tables(tmp_path):
     assert stats['counts']['episodic_memory'] == 2
     assert stats['counts']['triples'] == 3
     assert stats['counts']['consolidation_log'] == 1
+
+
+def test_backup_database_captures_committed_wal_data_and_is_private(tmp_path, monkeypatch):
+    monkeypatch.setenv('HERMES_HOME', str(tmp_path / 'hermes'))
+    db = tmp_path / 'mnemosyne.db'
+    con = sqlite3.connect(db)
+    assert con.execute('PRAGMA journal_mode=WAL').fetchone()[0] == 'wal'
+    con.execute('CREATE TABLE records(value TEXT)')
+    con.commit()
+    con.execute('INSERT INTO records VALUES (?)', ('committed-in-wal',))
+    con.commit()
+    assert (tmp_path / 'mnemosyne.db-wal').stat().st_size > 0
+
+    result = DashboardStore(db).backup_database(audit=True)
+    backup = Path(result['path'])
+    with sqlite3.connect(backup) as restored:
+        assert restored.execute('SELECT value FROM records').fetchone()[0] == 'committed-in-wal'
+        assert restored.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
+    assert backup.stat().st_mode & 0o777 == 0o600
+    audit = tmp_path / 'hermes' / 'plugin-data' / 'mnemosyne-dashboard' / 'audit.jsonl'
+    assert audit.stat().st_mode & 0o777 == 0o600
+    assert DashboardStore(db).audit_log()[0]['action'] == 'backup'
+    con.close()
+
+
+def test_bulk_memory_update_uses_one_backup_and_validates_before_writing(tmp_path, monkeypatch):
+    monkeypatch.setenv('HERMES_HOME', str(tmp_path / 'hermes'))
+    db = tmp_path / 'mnemosyne.db'
+    make_db(db)
+    store = DashboardStore(db)
+
+    result = store.bulk_update_memories(['w1', 'w2'], action='veracity', value='tool')
+    assert result['ok'] is True
+    assert result['count'] == 2
+    assert store.get_memory('w1')['veracity'] == 'tool'
+    assert store.get_memory('w2')['veracity'] == 'tool'
+    assert len(list((Path(result['backup']['path']).parent).glob('*.db'))) == 1
+
+    with pytest.raises(ValueError, match='memory not found'):
+        store.bulk_update_memories(['w1', 'missing'], action='veracity', value='stated')
+    assert store.get_memory('w1')['veracity'] == 'tool'
+    assert len(list((Path(result['backup']['path']).parent).glob('*.db'))) == 1
 
 
 def test_activity_series_aggregates_and_fills_daily_buckets(tmp_path):
@@ -1131,6 +1175,15 @@ def test_public_config_reports_lan_url_for_wildcard_bind(tmp_path, monkeypatch):
     cfg = save_config(host='0.0.0.0', port=8765)
     assert public_config(cfg)['local_url'] == 'http://127.0.0.1:8765/'
     assert public_config(cfg)['lan_url'] == 'http://192.168.1.160:8765/'
+
+
+def test_config_is_written_atomically_with_private_permissions(tmp_path, monkeypatch):
+    monkeypatch.setenv('HERMES_HOME', str(tmp_path / 'hermes'))
+    save_config(host='127.0.0.1', port=8765)
+    path = tmp_path / 'hermes' / 'plugin-data' / 'mnemosyne-dashboard' / 'config.json'
+    assert path.stat().st_mode & 0o777 == 0o600
+    assert path.parent.stat().st_mode & 0o777 == 0o700
+    assert not list(path.parent.glob('.config.json.*.tmp'))
 
 
 def test_config_validates_port(tmp_path, monkeypatch):

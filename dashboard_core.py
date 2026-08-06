@@ -5,7 +5,6 @@ import importlib.metadata
 import json
 import os
 import re
-import shutil
 import sqlite3
 import uuid
 from collections import Counter
@@ -24,6 +23,7 @@ def plugin_data_dir() -> Path:
     home = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
     path = home / "plugin-data" / "mnemosyne-dashboard"
     path.mkdir(parents=True, exist_ok=True)
+    path.chmod(0o700)
     return path
 
 
@@ -1142,18 +1142,125 @@ class DashboardStore:
             "after": after,
             "extra": extra or {},
         }
-        with path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n")
+        if path.exists():
+            path.chmod(0o600)
+        descriptor = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+        try:
+            payload = (json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
+            os.write(descriptor, payload)
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
 
-    def backup_database(self) -> dict[str, Any]:
+    def record_audit(self, action: str, *, memory_id: str = "", before: dict[str, Any] | None = None, after: dict[str, Any] | None = None, extra: dict[str, Any] | None = None) -> None:
+        self._audit(action, memory_id, before, after, extra)
+
+    def backup_database(self, *, audit: bool = False) -> dict[str, Any]:
         if not self.db_path.exists():
             raise FileNotFoundError(f"Mnemosyne DB not found: {self.db_path}")
         backup_dir = plugin_data_dir() / "backups"
         backup_dir.mkdir(parents=True, exist_ok=True)
+        backup_dir.chmod(0o700)
         stamp = _utc_now().replace(":", "").replace("-", "")
         target = backup_dir / f"mnemosyne-{stamp}-{uuid.uuid4().hex[:8]}.db"
-        shutil.copy2(self.db_path, target)
-        return {"path": str(target), "size_bytes": target.stat().st_size, "created_at": _utc_now()}
+        temporary = target.with_name(f".{target.name}.tmp")
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        os.close(descriptor)
+        try:
+            source = self.connect()
+            try:
+                destination = sqlite3.connect(temporary)
+                try:
+                    source.backup(destination)
+                    destination.commit()
+                    integrity = str(destination.execute("PRAGMA integrity_check").fetchone()[0])
+                    if integrity.lower() != "ok":
+                        raise RuntimeError(f"backup integrity check failed: {integrity}")
+                finally:
+                    destination.close()
+            finally:
+                source.close()
+            os.replace(temporary, target)
+            target.chmod(0o600)
+        finally:
+            if temporary.exists():
+                temporary.unlink()
+        result = {"path": str(target), "size_bytes": target.stat().st_size, "created_at": _utc_now(), "integrity": "ok"}
+        if audit:
+            self._audit("backup", "", extra={"backup": result})
+        return result
+
+    def bulk_update_memories(self, memory_ids: list[str], *, action: str, value: Any = None, backup: bool = True) -> dict[str, Any]:
+        ids = list(dict.fromkeys(str(memory_id or "").strip() for memory_id in memory_ids))
+        ids = [memory_id for memory_id in ids if memory_id]
+        if not ids:
+            raise ValueError("at least one memory_id is required")
+        if len(ids) > 500:
+            raise ValueError("bulk maintenance is limited to 500 memories")
+        action = str(action or "").strip().lower()
+        if action not in {"veracity", "importance", "expiry", "invalidate"}:
+            raise ValueError("unsupported bulk maintenance action")
+
+        before = []
+        for memory_id in ids:
+            item = self.get_memory(memory_id)
+            if not item:
+                raise ValueError(f"memory not found: {memory_id}")
+            if item.get("status") and item.get("status") != "active":
+                raise ValueError(f"memory is not active: {memory_id}")
+            before.append(item)
+
+        if action == "veracity":
+            value = str(value or "").strip().lower()
+            if value not in VERACITY_WEIGHTS:
+                raise ValueError("veracity must be one of: " + ", ".join(VERACITY_WEIGHTS))
+        elif action == "importance":
+            value = float(value)
+            if not 0 <= value <= 1:
+                raise ValueError("importance must be between 0.0 and 1.0")
+        elif action == "expiry":
+            value = str(value or "").strip()
+            if value:
+                try:
+                    datetime.fromisoformat(value.replace("Z", "+00:00"))
+                except ValueError as exc:
+                    raise ValueError("valid_until must be an ISO timestamp or empty") from exc
+            value = value or None
+        else:
+            value = _utc_now()
+
+        backup_info = self.backup_database() if backup else None
+        with self.session(rw=True) as con:
+            tables = self._tables(con)
+            columns = {table: self._columns(con, table) for table in tables}
+            for memory_id in ids:
+                modified = False
+                for table in ("working_memory", "episodic_memory", "memories"):
+                    if table not in tables:
+                        continue
+                    if action == "veracity" and "veracity" in columns[table]:
+                        modified = con.execute(f"UPDATE {table} SET veracity = ? WHERE id = ?", (value, memory_id)).rowcount > 0 or modified
+                    elif action == "importance" and "importance" in columns[table]:
+                        modified = con.execute(f"UPDATE {table} SET importance = ? WHERE id = ?", (value, memory_id)).rowcount > 0 or modified
+                    elif action == "expiry" and "valid_until" in columns[table]:
+                        modified = con.execute(f"UPDATE {table} SET valid_until = ? WHERE id = ?", (value, memory_id)).rowcount > 0 or modified
+                    elif action == "invalidate" and "valid_until" in columns[table]:
+                        if "superseded_by" in columns[table]:
+                            modified = con.execute(f"UPDATE {table} SET valid_until = ?, superseded_by = NULL WHERE id = ?", (value, memory_id)).rowcount > 0 or modified
+                        else:
+                            modified = con.execute(f"UPDATE {table} SET valid_until = ? WHERE id = ?", (value, memory_id)).rowcount > 0 or modified
+                if not modified:
+                    raise ValueError(f"{action} is not supported for memory: {memory_id}")
+
+        after = [self.get_memory(memory_id) for memory_id in ids]
+        self._audit(
+            f"bulk_{action}",
+            "",
+            before={"items": [{"id": item["id"], "status": item.get("status")} for item in before]},
+            after={"items": [{"id": item["id"], "status": item.get("status")} for item in after if item]},
+            extra={"memory_ids": ids, "count": len(ids), "value": value, "backup": backup_info},
+        )
+        return {"ok": True, "count": len(ids), "items": after, "backup": backup_info}
 
     def invalidate_memory(self, memory_id: str, backup: bool = True) -> dict[str, Any]:
         memory_id = (memory_id or "").strip()

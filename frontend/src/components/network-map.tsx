@@ -1,11 +1,13 @@
-import { type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react"
-import { Maximize2, Minus, Minimize2, Palette, Plus, RotateCcw, Tags } from "lucide-react"
+import { type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react"
+import { Maximize2, Minus, Minimize2, Plus, RotateCcw, Tags } from "lucide-react"
 
+import { CanvasTooltip, FullscreenInspectorPanel, NetworkDimensionTabs, NetworkSearchControl, type NetworkDimension } from "@/components/network-canvas-controls"
 import { NetworkLegend } from "@/components/network-legend"
 import { Button } from "@/components/ui/button"
-import { networkColorModeLabel, networkNodeColor, type NetworkColorMode } from "@/lib/network-appearance"
+import { networkNodeColor, type NetworkColorMode } from "@/lib/network-appearance"
 import { cn } from "@/lib/utils"
 import { layoutNetwork, limitNetworkEdges, projectNetwork, type NetworkMode } from "@/lib/network-layout"
+import { networkNodeMatchesSearch } from "@/lib/network-search"
 import type { GraphEdge, GraphNode } from "@/lib/types"
 
 type ViewOffset = { x: number; y: number }
@@ -17,12 +19,17 @@ export function NetworkMap({
   edges,
   emptyMessage = "No relationships are available for this view.",
   fullscreenPanel,
+  fullscreenTargetRef,
   mode = "graph",
   nodes,
   onColorModeChange,
   onClearSelection,
+  onDimensionChange,
+  onSearchQueryChange,
   onSelect,
   presentation = "full",
+  dimension = "2d",
+  searchQuery = "",
   selectedId,
   showEdgeLabels = false,
 }: {
@@ -30,12 +37,17 @@ export function NetworkMap({
   edges: GraphEdge[]
   emptyMessage?: string
   fullscreenPanel?: ReactNode
+  fullscreenTargetRef?: RefObject<HTMLElement | null>
   mode?: NetworkMode
   nodes: GraphNode[]
   onColorModeChange?: (mode: NetworkColorMode) => void
   onClearSelection?: () => void
+  onDimensionChange?: (dimension: NetworkDimension) => void
+  onSearchQueryChange?: (query: string) => void
   onSelect?: (node: GraphNode) => void
   presentation?: "full" | "preview"
+  dimension?: NetworkDimension
+  searchQuery?: string
   selectedId?: string
   showEdgeLabels?: boolean
 }) {
@@ -64,14 +76,17 @@ export function NetworkMap({
     }
     return ids
   }, [selectedId, visibleEdges])
+  const searchActive = Boolean(searchQuery.trim())
+  const searchMatchIds = useMemo(() => new Set(positioned.filter((node) => networkNodeMatchesSearch(node, searchQuery)).map((node) => node.id)), [positioned, searchQuery])
   const selectedNode = selectedId ? byId.get(selectedId) : undefined
   const previewTransform = useMemo(() => fitPreviewTransform(positioned), [positioned])
 
   useEffect(() => {
-    const update = () => setFullscreen(document.fullscreenElement === containerRef.current)
+    const update = () => setFullscreen(document.fullscreenElement === (fullscreenTargetRef?.current || containerRef.current))
+    update()
     document.addEventListener("fullscreenchange", update)
     return () => document.removeEventListener("fullscreenchange", update)
-  }, [])
+  }, [fullscreenTargetRef])
 
   const reset = () => {
     setOffset({ x: 0, y: 0 })
@@ -79,9 +94,10 @@ export function NetworkMap({
   }
 
   const toggleFullscreen = async () => {
-    if (!containerRef.current || !document.fullscreenEnabled) return
-    if (document.fullscreenElement === containerRef.current) await document.exitFullscreen()
-    else await containerRef.current.requestFullscreen()
+    const target = fullscreenTargetRef?.current || containerRef.current
+    if (!target || !document.fullscreenEnabled) return
+    if (document.fullscreenElement === target) await document.exitFullscreen()
+    else await target.requestFullscreen()
   }
 
   const positionTip = (event: ReactPointerEvent, label: string, detail: string) => {
@@ -92,17 +108,18 @@ export function NetworkMap({
 
   return (
     <div
-      className={cn("relative overflow-hidden rounded-lg border bg-background/35 shadow-inner shadow-black/5 fullscreen:bg-background", preview ? "min-h-[22rem]" : "min-h-[28rem] fullscreen:min-h-screen fullscreen:rounded-none fullscreen:border-0")}
+      className={cn("relative overflow-hidden rounded-lg border bg-background/35 shadow-inner shadow-black/5 fullscreen:bg-background", preview ? "min-h-[22rem]" : "min-h-[28rem] fullscreen:min-h-screen fullscreen:rounded-none fullscreen:border-0", fullscreen && "min-h-screen rounded-none border-0 bg-background")}
       data-network-mode={mode}
       ref={containerRef}
     >
-      {!preview ? <div className="absolute right-3 top-3 z-10 flex gap-1 rounded-md border bg-background/90 p-1 shadow-sm backdrop-blur">
-        <Button aria-label="Zoom out" disabled={zoom <= 0.28} onClick={() => setZoom((value) => Math.max(0.28, value - 0.15))} size="icon" variant="ghost"><Minus /></Button>
-        <Button aria-label="Reset view" onClick={reset} size="icon" variant="ghost"><RotateCcw /></Button>
-        <Button aria-label="Zoom in" disabled={zoom >= 2.4} onClick={() => setZoom((value) => Math.min(2.4, value + 0.15))} size="icon" variant="ghost"><Plus /></Button>
-        <Button aria-label={`Color by ${colorMode === "type" ? (mode === "graph" ? "source" : "category") : "type"}`} onClick={() => onColorModeChange?.(colorMode === "type" ? "category" : "type")} size="sm" title={`Currently colored by ${networkColorModeLabel(mode, colorMode).toLowerCase()}`} variant="ghost"><Palette /><span className="hidden lg:inline">{networkColorModeLabel(mode, colorMode)}</span></Button>
-        <Button aria-label={labelsVisible ? "Hide priority labels" : "Show priority labels"} aria-pressed={labelsVisible} onClick={() => setLabelsVisible((value) => !value)} size="icon" title="Labels prioritize larger and more connected nodes; selected neighborhoods are always labeled." variant={labelsVisible ? "secondary" : "ghost"}><Tags /></Button>
-        {document.fullscreenEnabled ? <Button aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"} onClick={() => void toggleFullscreen()} size="icon" variant="ghost">{fullscreen ? <Minimize2 /> : <Maximize2 />}</Button> : null}
+      {!preview && onDimensionChange ? <div className="absolute left-3 top-3 z-40"><NetworkDimensionTabs dimension={dimension} onChange={onDimensionChange} /></div> : null}
+      {!preview ? <div className="absolute right-3 top-3 z-40 flex gap-1 rounded-md border bg-background/90 p-1 shadow-sm backdrop-blur">
+        {onSearchQueryChange ? <NetworkSearchControl matchCount={searchMatchIds.size} onChange={onSearchQueryChange} query={searchQuery} /> : null}
+        <CanvasTooltip label="Zoom out"><Button aria-label="Zoom out" disabled={zoom <= 0.28} onClick={() => setZoom((value) => Math.max(0.28, value - 0.15))} size="icon" variant="ghost"><Minus /></Button></CanvasTooltip>
+        <CanvasTooltip label="Reset view"><Button aria-label="Reset view" onClick={reset} size="icon" variant="ghost"><RotateCcw /></Button></CanvasTooltip>
+        <CanvasTooltip label="Zoom in"><Button aria-label="Zoom in" disabled={zoom >= 2.4} onClick={() => setZoom((value) => Math.min(2.4, value + 0.15))} size="icon" variant="ghost"><Plus /></Button></CanvasTooltip>
+        <CanvasTooltip label={labelsVisible ? "Hide priority labels" : "Show priority labels"}><Button aria-label={labelsVisible ? "Hide priority labels" : "Show priority labels"} aria-pressed={labelsVisible} onClick={() => setLabelsVisible((value) => !value)} size="icon" variant={labelsVisible ? "secondary" : "ghost"}><Tags /></Button></CanvasTooltip>
+        {document.fullscreenEnabled ? <CanvasTooltip label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"}><Button aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"} onClick={() => void toggleFullscreen()} size="icon" variant="ghost">{fullscreen ? <Minimize2 /> : <Maximize2 />}</Button></CanvasTooltip> : null}
       </div> : null}
       {!positioned.length ? <div className={cn("grid place-items-center px-8 text-center", preview ? "min-h-[22rem]" : "min-h-[34rem]")}><p className="max-w-lg text-sm leading-6 text-muted-foreground">{emptyMessage}</p></div> : (
         <svg
@@ -155,7 +172,8 @@ export function NetworkMap({
               const target = byId.get(edge.target)
               if (!source || !target) return null
               const selected = selectedId && (edge.source === selectedId || edge.target === selectedId)
-              const deEmphasized = Boolean(selectedId && !selected)
+              const searchAssociated = !searchActive || searchMatchIds.has(edge.source) || searchMatchIds.has(edge.target)
+              const deEmphasized = Boolean((selectedId && !selected) || !searchAssociated)
               const predicate = edge.predicate || edge.label || "related"
               const detail = `${edge.subject || source.label} → ${edge.object || target.label}`
               return <g key={edge.id}>
@@ -172,14 +190,15 @@ export function NetworkMap({
                   y1={source.screenY}
                   y2={target.screenY}
                 />
-                {showEdgeLabels && (selected || (labelsVisible && edgeLabelIds.has(edge.id))) ? <text className="pointer-events-none fill-primary text-[9px]" fontWeight="600" paintOrder="stroke" stroke="var(--background)" strokeWidth="4" textAnchor="middle" x={(source.screenX + target.screenX) / 2} y={(source.screenY + target.screenY) / 2 - 4}>{shortEdgeLabel(predicate)}</text> : null}
+                {showEdgeLabels && !searchActive && (selected || (labelsVisible && edgeLabelIds.has(edge.id))) ? <text className="pointer-events-none fill-primary text-[9px]" fontWeight="600" paintOrder="stroke" stroke="var(--background)" strokeWidth="4" textAnchor="middle" x={(source.screenX + target.screenX) / 2} y={(source.screenY + target.screenY) / 2 - 4}>{shortEdgeLabel(predicate)}</text> : null}
               </g>
             })}
             {[...positioned].sort((a, b) => b.depth - a.depth).map((node) => {
               const selected = node.id === selectedId
-              const associated = !selectedId || connectedIds.has(node.id)
+              const searchMatch = !searchActive || searchMatchIds.has(node.id)
+              const associated = (!selectedId || connectedIds.has(node.id)) && searchMatch
               const placement = labelPlacements.get(node.id)
-              const showLabel = selected || connectedIds.has(node.id) || (labelsVisible && Boolean(placement))
+              const showLabel = searchActive ? searchMatch : selected || connectedIds.has(node.id) || (labelsVisible && Boolean(placement))
               const depthOpacity = Math.max(0.5, Math.min(1, 0.78 - node.depth / 1100))
               const color = networkNodeColor(node, mode, colorMode)
               return (
@@ -198,7 +217,7 @@ export function NetworkMap({
                   transform={`translate(${node.screenX} ${node.screenY})`}
                 >
                   {selected ? <circle className="fill-primary/25" filter={`url(#node-glow-${mode})`} r={node.screenRadius * 2.4} /> : null}
-                  <circle className={cn(selected && "stroke-foreground")} fill={color} opacity={selected ? 1 : associated ? depthOpacity : Math.max(0.34, depthOpacity * 0.48)} r={node.screenRadius} strokeWidth={selected ? 2.5 : 0} />
+                  <circle className={cn(selected && "stroke-foreground", searchActive && searchMatch && !selected && "stroke-primary")} fill={color} opacity={selected ? 1 : associated ? depthOpacity : searchActive ? Math.max(0.16, depthOpacity * 0.22) : Math.max(0.34, depthOpacity * 0.48)} r={node.screenRadius} strokeWidth={selected ? 2.5 : searchActive && searchMatch ? 1.5 : 0} />
                   {showLabel ? <text className="fill-foreground text-[11px]" fontWeight={selected ? 650 : 500} paintOrder="stroke" stroke="var(--background)" strokeWidth="4" textAnchor={placement?.anchor || "start"} x={placement?.x ?? node.screenRadius + 6} y={placement?.y ?? 4}>{shortLabel(node.label)}</text> : null}
                 </g>
               )
@@ -207,9 +226,9 @@ export function NetworkMap({
         </svg>
       )}
       {hoverTip ? <div className="pointer-events-none absolute z-20 max-w-64 rounded-md border bg-popover/95 px-2.5 py-2 text-xs shadow-lg backdrop-blur" style={{ left: Math.max(8, Math.min(hoverTip.x, (containerRef.current?.clientWidth || 320) - 270)), top: Math.max(8, Math.min(hoverTip.y, (containerRef.current?.clientHeight || 320) - 72)) }}><p className="truncate font-medium text-popover-foreground">{hoverTip.label}</p><p className="mt-0.5 truncate text-muted-foreground">{hoverTip.detail}</p></div> : null}
-      {!preview && fullscreen && fullscreenPanel ? <div className="absolute inset-x-4 bottom-4 z-10 max-h-[44vh] overflow-auto rounded-lg border bg-background/94 p-5 shadow-2xl backdrop-blur-xl md:inset-y-16 md:left-auto md:w-[23rem] md:max-h-none">{fullscreenPanel}</div> : null}
+      {!preview && fullscreen && selectedNode && fullscreenPanel ? <FullscreenInspectorPanel onClose={() => onClearSelection?.()}>{fullscreenPanel}</FullscreenInspectorPanel> : null}
       {fullscreen && selectedNode && !fullscreenPanel ? <div className="absolute bottom-4 left-4 max-w-sm border-l-2 border-primary bg-background/90 px-4 py-3 text-sm shadow-lg backdrop-blur"><p className="font-semibold">{selectedNode.label}</p><p className="mt-1 text-xs text-muted-foreground">{selectedNode.kind || "entity"}{selectedNode.category ? ` · ${selectedNode.category}` : ""} · {selectedNode.degree} connections</p></div> : null}
-      <NetworkLegend colorMode={colorMode} mode={mode} nodes={nodes} />
+      <NetworkLegend colorMode={colorMode} mode={mode} nodes={nodes} onColorModeChange={onColorModeChange} />
       <p className="pointer-events-none absolute bottom-3 right-3 hidden text-xs text-muted-foreground sm:block">{preview ? "Select a node to open the full visualizer" : "Drag to pan · scroll to zoom · select a node to inspect"}</p>
     </div>
   )

@@ -4,6 +4,9 @@
 
 - Promote the complete React/shadcn-style interface to `/`, retain `/legacy` as a temporary soak-period fallback and `/candidate` as a compatibility alias, and preserve historical `?tab=` deep links.
 - Add React password login/logout, audited single and bulk memory maintenance, backup controls, and maintenance history so the default interface reaches legacy feature parity without weakening read-only or LAN-auth safety.
+- Make backups WAL-safe and integrity-checked, store config/audit/backup artifacts with owner-only permissions, audit configuration, database-selection, and backup actions, and restore an explicit clear-password control.
+- Require localhost or password-authenticated access for configuration changes, database selection, and backups while keeping ordinary browsing read-only and LAN-friendly.
+- Make bulk maintenance validate all selected active memories before one transactional update, one optional backup, and one summarized audit record.
 - Pin the frontend dependency graph exactly, enforce a seven-day Bun release-age gate with lifecycle scripts disabled, pin the Bun CI action and runtime, and add an offline lockfile-to-IOC audit command.
 - Add a global database selector to the desktop rail and compact mobile header so Mnemosyne databases can be switched at runtime without restarting.
 - Discover direct-profile and bank-style Hermes brains automatically, including when `HERMES_HOME` points at an isolated profile; switching stays read-only and limited to the discovered/configured set.

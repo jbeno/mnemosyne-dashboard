@@ -161,12 +161,13 @@ function DashboardApp({ auth, onAuthChange, onLogout, onToggleTheme, theme }: { 
   else if (page === "memoria") content = <MemoriaPage databaseKey={dashboard.activeDatabase} />
   else if (page === "profile") content = <PersonaFactsPage databaseKey={dashboard.activeDatabase} />
   else if (page === "visualizer") content = <VisualizerPage databaseKey={dashboard.activeDatabase} initialSelectedCategory={locationParams.get("nodeCategory") || undefined} initialSelectedId={locationParams.get("node") || undefined} initialSelectedKind={locationParams.get("nodeKind") || undefined} initialSelectedLabel={locationParams.get("nodeLabel") || undefined} />
-  else if (page === "settings") content = <SettingsPage databaseKey={dashboard.activeDatabase} onAuthStatusChange={onAuthChange} />
+  else if (page === "settings") content = <SettingsPage backupAllowed={auth.can_backup} configureAllowed={auth.can_configure} databaseKey={dashboard.activeDatabase} onAuthStatusChange={onAuthChange} />
   else if (page === "about") content = <AboutPage />
 
   return (
       <AppShell
       activeDatabase={dashboard.activeDatabase}
+      databaseSelectionAllowed={auth.can_select_database}
       databases={dashboard.databases}
       onNavigate={navigate}
       onReload={dashboard.reload}

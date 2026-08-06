@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import mimetypes
 import os
@@ -262,15 +263,36 @@ class Handler(BaseHTTPRequestHandler):
         morsel = jar.get(AUTH_COOKIE)
         return bool(morsel and morsel.value == auth_cookie_value(cfg))
 
-    def _auth_status(self) -> dict[str, Any]:
+    def _auth_status(self, *, authenticated: bool | None = None) -> dict[str, Any]:
         cfg = self.cfg
+        authenticated = self._authenticated() if authenticated is None else authenticated
+        control_allowed = self._client_is_loopback() or bool(cfg.auth_enabled and cfg.has_password and authenticated)
         return {
             "version": VERSION,
             "auth_enabled": cfg.auth_enabled,
             "has_password": cfg.has_password,
-            "authenticated": self._authenticated(),
+            "authenticated": authenticated,
+            "can_backup": control_allowed,
+            "can_configure": control_allowed,
+            "can_select_database": control_allowed,
             "config": public_config(cfg),
         }
+
+    def _client_is_loopback(self) -> bool:
+        try:
+            return ipaddress.ip_address(self.client_address[0]).is_loopback
+        except ValueError:
+            return self.client_address[0] == "localhost"
+
+    def _control_allowed(self) -> bool:
+        cfg = self.cfg
+        return self._client_is_loopback() or bool(cfg.auth_enabled and cfg.has_password and self._authenticated())
+
+    def _require_control(self, action: str) -> bool:
+        if self._control_allowed():
+            return True
+        self._send_json({"error": f"{action} requires localhost or password authentication", **self._auth_status()}, 403)
+        return False
 
     def _require_auth(self, path: str) -> bool:
         public_paths = {"/api/auth/status", "/api/auth/login"}
@@ -286,7 +308,7 @@ class Handler(BaseHTTPRequestHandler):
         if not cfg.memory_admin_enabled:
             self._send_json({"error": "memory admin mode is disabled", "config": public_config(cfg)}, 403)
             return False
-        local_request = cfg.host in {"127.0.0.1", "localhost", "::1"} and self.client_address[0] in {"127.0.0.1", "::1"}
+        local_request = cfg.host in {"127.0.0.1", "localhost", "::1"} and self._client_is_loopback()
         if local_request:
             return True
         if not cfg.auth_enabled or not cfg.has_password or not self._authenticated():
@@ -343,7 +365,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/realtime/events":
                 return self._send_sse(self.store.realtime_event_snapshot(limit=_safe_int(q.get("limit"), 25, maximum=100)))
             if path == "/api/admin/audit":
-                if not self._require_admin():
+                if not self._require_control("maintenance audit"):
                     return
                 return self._send_json({"items": self.store.audit_log(limit=_safe_int(q.get("limit"), 100, maximum=1000))})
             if path == "/api/stats":
@@ -441,10 +463,10 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/auth/login":
                 cfg = self.cfg
                 if not cfg.auth_enabled:
-                    return self._send_json({"ok": True, "auth_enabled": False})
+                    return self._send_json({"ok": True, **self._auth_status()})
                 if verify_password(str(body.get("password") or ""), cfg):
                     return self._send_json(
-                        {"ok": True, **self._auth_status()},
+                        {"ok": True, **self._auth_status(authenticated=True)},
                         headers={"Set-Cookie": f"{AUTH_COOKIE}={auth_cookie_value(cfg)}; Path=/; SameSite=Lax; HttpOnly"},
                     )
                 return self._send_json({"ok": False, "error": "invalid password"}, 403)
@@ -453,12 +475,20 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/auth/logout":
                 return self._send_json({"ok": True}, headers={"Set-Cookie": f"{AUTH_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly"})
             if path == "/api/config":
+                if not self._require_control("configuration changes"):
+                    return
                 allowed = {"host", "port", "db_path", "auth_enabled", "password", "clear_password", "memory_admin_enabled"}
                 updates = {k: body.get(k) for k in allowed if k in body}
+                before = public_config(self.cfg)
                 cfg = save_config(**updates)
                 self.server.saved_config = cfg
+                after = public_config(cfg)
+                changed = sorted(key for key in before if before.get(key) != after.get(key))
+                self.store.record_audit("config", before=before, after=after, extra={"changed_fields": changed})
                 return self._send_json({"ok": True, "config": public_config(cfg), "message": "Saved. Auth changes take effect immediately; host/port/db changes require restart."})
             if path == "/api/databases/select":
+                if not self._require_control("database selection"):
+                    return
                 requested = str(body.get("path") or "").strip()
                 persist = bool(body.get("persist", False))
                 active = str(getattr(self.server, "db_path", default_db_path()))
@@ -475,11 +505,29 @@ class Handler(BaseHTTPRequestHandler):
                 if persist:
                     cfg = save_config(db_path=resolved)
                     self.server.saved_config = cfg
+                self.store.record_audit(
+                    "database_select",
+                    before={"path": active},
+                    after={"path": resolved},
+                    extra={"persisted": persist},
+                )
                 return self._send_json({"ok": True, "active": resolved, "persisted": persist})
             if path == "/api/admin/backup":
+                if not self._require_control("database backup"):
+                    return
+                return self._send_json({"ok": True, "backup": self.store.backup_database(audit=True)})
+            if path == "/api/admin/memory/bulk":
                 if not self._require_admin():
                     return
-                return self._send_json({"ok": True, "backup": self.store.backup_database()})
+                memory_ids = body.get("memory_ids")
+                if not isinstance(memory_ids, list):
+                    raise ValueError("memory_ids must be a list")
+                return self._send_json(self.store.bulk_update_memories(
+                    memory_ids,
+                    action=str(body.get("action") or ""),
+                    value=body.get("value"),
+                    backup=bool(body.get("backup", True)),
+                ))
             if path == "/api/admin/memory/invalidate":
                 if not self._require_admin():
                     return
@@ -503,6 +551,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_json({"error": "not found"}, 404)
         except (BrokenPipeError, ConnectionResetError):
             return
+        except ValueError as e:
+            return self._send_json({"ok": False, "error": str(e)}, 400)
         except Exception as e:
             return self._send_json({"ok": False, "error": str(e)}, 500)
 

@@ -48,6 +48,7 @@ def lan_host() -> str:
 def data_dir() -> Path:
     path = hermes_home() / "plugin-data" / PLUGIN_NAME
     path.mkdir(parents=True, exist_ok=True)
+    path.chmod(0o700)
     return path
 
 
@@ -174,7 +175,20 @@ def _validate(raw: dict[str, Any]) -> DashboardConfig:
 def _write_config(cfg: DashboardConfig) -> None:
     path = config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(asdict(cfg), ensure_ascii=False, indent=2) + "\n")
+    path.parent.chmod(0o700)
+    temporary = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
+    payload = json.dumps(asdict(cfg), ensure_ascii=False, indent=2) + "\n"
+    try:
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        path.chmod(0o600)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
 
 
 def load_config(create: bool = True) -> DashboardConfig:
@@ -196,6 +210,8 @@ def load_config(create: bool = True) -> DashboardConfig:
     cfg = _validate(raw)
     if create and (needs_write or not path.exists() or not raw.get("auth_secret")):
         _write_config(cfg)
+    elif path.exists():
+        path.chmod(0o600)
     return cfg
 
 
