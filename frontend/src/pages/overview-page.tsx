@@ -1,26 +1,32 @@
-import { useEffect, useState } from "react"
-import { CalendarDays } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { ArrowUpRight, CalendarDays } from "lucide-react"
 
 import { ChartPanel } from "@/components/chart-panel"
 import { ActivityChart, CategoryBarChart, type CategoryDatum } from "@/components/dashboard-charts"
 import { MetricStrip } from "@/components/metric-strip"
+import { NetworkMap } from "@/components/network-map"
 import { PageHeader } from "@/components/page-header"
+import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { dashboardApi } from "@/lib/api"
-import type { ActivitySeries, CountRow, Stats } from "@/lib/types"
+import type { ActivitySeries, ConstellationData, CountRow, GraphNode, Stats } from "@/lib/types"
 
 export function OverviewPage({
   databaseKey,
   stats,
   loading,
+  onOpenVisualizer,
 }: {
   databaseKey: string
   stats: Stats | null
   loading: boolean
+  onOpenVisualizer: (node?: Pick<GraphNode, "id" | "label" | "kind" | "category">) => void
 }) {
   const [days, setDays] = useState(30)
   const [activity, setActivity] = useState<ActivitySeries | null>(null)
   const [activityLoading, setActivityLoading] = useState(true)
+  const [constellation, setConstellation] = useState<ConstellationData>({ nodes: [], edges: [], clusters: [] })
+  const [constellationLoading, setConstellationLoading] = useState(true)
   const working = stats?.working_memory?.unconsolidated ?? stats?.counts.working_memory ?? 0
   const inventory: CategoryDatum[] = [
     { description: "Short-term records that have not yet been consolidated into durable memory.", label: "Working", value: working },
@@ -52,8 +58,25 @@ export function OverviewPage({
     return () => { active = false }
   }, [databaseKey, days])
 
+  useEffect(() => {
+    if (!databaseKey) return
+    let active = true
+    setConstellationLoading(true)
+    void dashboardApi.constellation()
+      .then((response) => { if (active) setConstellation(response) })
+      .catch(() => { if (active) setConstellation({ nodes: [], edges: [], clusters: [] }) })
+      .finally(() => { if (active) setConstellationLoading(false) })
+    return () => { active = false }
+  }, [databaseKey])
+
+  const preview = useMemo(() => {
+    const nodes = constellation.nodes.slice(0, 120)
+    const ids = new Set(nodes.map((node) => node.id))
+    return { nodes, edges: constellation.edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target)) }
+  }, [constellation])
+
   return (
-    <div className="space-y-10" aria-busy={loading || activityLoading}>
+    <div className="space-y-10" aria-busy={loading || activityLoading || constellationLoading}>
       <PageHeader
         description="A current read on retained memory, trust, lifecycle health, and consolidation activity."
         divided={false}
@@ -65,28 +88,40 @@ export function OverviewPage({
         <MetricStrip metrics={keyMetrics} />
       </section>
 
-      <ChartPanel
-        actions={(
-          <Select onValueChange={(value) => setDays(Number(value))} value={String(days)}>
-            <SelectTrigger aria-label="Activity timeframe" className="w-48 sm:w-52">
-              <CalendarDays />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7">Last 7 days</SelectItem>
-              <SelectItem value="30">Last 30 days</SelectItem>
-              <SelectItem value="90">Last 90 days</SelectItem>
-              <SelectItem value="365">Last year</SelectItem>
-            </SelectContent>
-          </Select>
-        )}
-        className="border-t-0 pt-0"
-        description={`Daily records written across memory, knowledge, and consolidation logs during the last ${days} days.`}
-        help="Spikes show write or consolidation activity, not necessarily a problem. A sustained rise in working memory without consolidations is the pattern worth investigating. The range changes this activity history; the metrics above remain a current snapshot."
-        title="Memory activity"
-      >
-        <ActivityChart data={activity?.series || []} />
-      </ChartPanel>
+      <div className="grid gap-x-10 gap-y-12 xl:grid-cols-2">
+        <ChartPanel
+          actions={(
+            <Select onValueChange={(value) => setDays(Number(value))} value={String(days)}>
+              <SelectTrigger aria-label="Activity timeframe" className="w-48 sm:w-52">
+                <CalendarDays />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7">Last 7 days</SelectItem>
+                <SelectItem value="30">Last 30 days</SelectItem>
+                <SelectItem value="90">Last 90 days</SelectItem>
+                <SelectItem value="365">Last year</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+          className="border-t-0 pt-0"
+          description={`Daily records written across memory, knowledge, and consolidation logs during the last ${days} days.`}
+          help="Spikes show write or consolidation activity, not necessarily a problem. A sustained rise in working memory without consolidations is the pattern worth investigating. The range changes this activity history; the metrics above remain a current snapshot."
+          title="Memory activity"
+        >
+          <ActivityChart data={activity?.series || []} />
+        </ChartPanel>
+
+        <ChartPanel
+          actions={<Button onClick={() => onOpenVisualizer()} size="sm" variant="ghost">Open visualizer<ArrowUpRight /></Button>}
+          className="border-t-0 pt-0"
+          description="Current relationships between retained memories and the entities they mention."
+          help="This is a current snapshot rather than a time series. Color distinguishes retained memories from entity/topic nodes; position groups nodes by dashboard category, and size reflects weight and connectivity."
+          title="Memory map"
+        >
+          <NetworkMap colorMode="type" edges={preview.edges} emptyMessage={constellationLoading ? "Loading the current memory map…" : "No memory relationships are available for this database."} mode="constellation" nodes={preview.nodes} onSelect={onOpenVisualizer} presentation="preview" />
+        </ChartPanel>
+      </div>
 
       <div className="grid gap-x-10 gap-y-12 xl:grid-cols-2">
         <ChartPanel description="Current retained records by storage function." help="This is the shape of the memory store. Working memory is short-lived; episodic memory and structured knowledge relations are durable forms produced by consolidation and extraction." title="System inventory">

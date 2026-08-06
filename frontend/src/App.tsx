@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { useDashboard } from "@/hooks/use-dashboard"
 import { useTheme } from "@/hooks/use-theme"
+import type { GraphNode } from "@/lib/types"
 import { AboutPage } from "@/pages/about-page"
 import { HistoryPage } from "@/pages/history-page"
 import { MemoriesPage } from "@/pages/memories-page"
@@ -64,12 +65,37 @@ export default function App() {
   const navigate = useCallback((nextPage: PageId) => {
     const url = new URL(window.location.href)
     url.searchParams.set("page", nextPage)
+    url.searchParams.delete("node")
+    url.searchParams.delete("nodeLabel")
+    url.searchParams.delete("nodeKind")
+    url.searchParams.delete("nodeCategory")
     if (nextPage === "memories") {
       url.searchParams.delete("q")
       setMemorySearch("")
     }
     window.history.pushState({}, "", url)
     setPage(nextPage)
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }, [])
+
+  const openVisualizer = useCallback((node?: Pick<GraphNode, "id" | "label" | "kind" | "category">) => {
+    const url = new URL(window.location.href)
+    url.searchParams.set("page", "visualizer")
+    if (node) {
+      url.searchParams.set("node", node.id)
+      url.searchParams.set("nodeLabel", node.label)
+      if (node.kind) url.searchParams.set("nodeKind", node.kind)
+      else url.searchParams.delete("nodeKind")
+      if (node.category) url.searchParams.set("nodeCategory", node.category)
+      else url.searchParams.delete("nodeCategory")
+    } else {
+      url.searchParams.delete("node")
+      url.searchParams.delete("nodeLabel")
+      url.searchParams.delete("nodeKind")
+      url.searchParams.delete("nodeCategory")
+    }
+    window.history.pushState({}, "", url)
+    setPage("visualizer")
     window.scrollTo({ top: 0, behavior: "smooth" })
   }, [])
 
@@ -83,8 +109,9 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" })
   }, [])
 
+  const locationParams = new URLSearchParams(window.location.search)
   let content
-  if (page === "overview") content = <OverviewPage databaseKey={dashboard.activeDatabase} loading={dashboard.loading} stats={dashboard.stats} />
+  if (page === "overview") content = <OverviewPage databaseKey={dashboard.activeDatabase} loading={dashboard.loading} onOpenVisualizer={openVisualizer} stats={dashboard.stats} />
   else if (page === "today") content = <TodayPage digest={dashboard.today} loading={dashboard.loading} />
   else if (page === "memories") content = <MemoriesPage databaseKey={dashboard.activeDatabase} searchRequest={memorySearch} stats={dashboard.stats} />
   else if (page === "review") content = <ReviewPage databaseKey={dashboard.activeDatabase} />
@@ -94,7 +121,7 @@ export default function App() {
   else if (page === "graph") content = <KnowledgeGraphPage databaseKey={dashboard.activeDatabase} />
   else if (page === "memoria") content = <MemoriaPage databaseKey={dashboard.activeDatabase} />
   else if (page === "profile") content = <PersonaFactsPage databaseKey={dashboard.activeDatabase} />
-  else if (page === "visualizer") content = <VisualizerPage databaseKey={dashboard.activeDatabase} />
+  else if (page === "visualizer") content = <VisualizerPage databaseKey={dashboard.activeDatabase} initialSelectedCategory={locationParams.get("nodeCategory") || undefined} initialSelectedId={locationParams.get("node") || undefined} initialSelectedKind={locationParams.get("nodeKind") || undefined} initialSelectedLabel={locationParams.get("nodeLabel") || undefined} />
   else if (page === "settings") content = <SettingsPage databaseKey={dashboard.activeDatabase} />
   else if (page === "about") content = <AboutPage />
 

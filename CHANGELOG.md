@@ -22,8 +22,11 @@
 - Split data-heavy candidate routes into lazy-loaded bundles and add source-owned shadcn-style Badge and responsive Table primitives without adding runtime dependencies.
 - Restore category-aware spatial layouts for Constellation and Neural Map, add integrated 2D/3D switching, orbit/pan/zoom controls, fullscreen presentation, reduced-motion handling, and click-through node inspection using the repository's vendored Three.js runtime.
 - Read the current episodic `facts` and MEMORIA knowledge stores alongside temporal `triples`, preserving store provenance so modern Mnemosyne databases no longer render an empty Knowledge Graph.
-- Extend the Knowledge Graph with a readable flat 2D force map and volumetric clustered 3D view, ambient-label controls, persistent selected-neighborhood node/predicate labels, highlighted connections, hover summaries, and complete fullscreen inspector overlays across every network map.
+- Extend the Knowledge Graph with a readable flat 2D force map and volumetric source-grouped 3D view, ambient-label controls, persistent selected-neighborhood node/predicate labels, highlighted connections, hover summaries, and complete fullscreen inspector overlays across every network map.
 - Restore topology-specific visual language in 3D: blue/gold Constellation stars, teal/coral Neural nodes, and subtle source-aware glow for Knowledge Graph entities.
+- Add toggleable graph legends, type/category color modes, category-grouped layouts without decorative region shapes or per-node halos, linked-node navigation, empty-canvas deselection, wider zoom-out ranges, and selection focus that gently de-emphasizes unrelated nodes while retaining ambient labels and the selected neighborhood in 2D, 3D, and fullscreen views.
+- Make ambient labels deterministic and size-aware: the largest and most-connected nodes are guaranteed labels first, with collision-aware placement and a larger secondary-label budget.
+- Give every predefined dashboard category a stable, distinct map color and add a compact reusable, auto-fitted memory-map snapshot beside the Overview activity timeline. The preview uses type coloring and carries a clicked node into the full Visualizer selection.
 - Document standalone use without Hermes and the maintained-fork workflow.
 
 ## 0.14.0

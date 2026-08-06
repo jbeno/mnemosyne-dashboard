@@ -138,9 +138,9 @@ The generator creates a temporary mock SQLite database, starts the dashboard on 
 - Read-only Memory Intelligence views:
   - Today — daily digest of memories added/recalled, structured relations, consolidations, entities, sources, and sessions
   - Context Bank — inferred context sections derived from active memories and structured relations without writing back
-  - Visualiser — selectable Constellation and Neural Map views with stable 2D and rotating 3D renderers, ambient-label controls, fullscreen presentation, and click-through read-only inspectors
+  - Visualiser — selectable Constellation and Neural Map views with stable 2D and rotating 3D renderers, priority-label and legend controls, type/category coloring, category-grouped layouts, fullscreen presentation, selected-neighborhood focus, and linked-node read-only inspectors
 - Nine-section product navigation instead of raw database tabs:
-  - Overview — counts, breakdowns, quick actions, and recent memories
+  - Overview — current health metrics, activity history, a compact live memory map, and operational breakdowns
   - Today — read-only daily memory digest
   - Context Bank — inferred context from active memory
   - Visualiser — Constellation and Neural Map memory visualisers
@@ -159,7 +159,7 @@ The generator creates a temporary mock SQLite database, starts the dashboard on 
   - Mini timeline grouped by day or session
   - Consolidation history with filtering, JSON inspection, and jump-to-session memories
 - Graph section:
-  - Interactive 2D/3D relationship graph across temporal triples, episodic facts, and MEMORIA relationships with query filtering, ambient-label controls, persistent selected-neighborhood predicates, connection highlighting, hover summaries, orbit/pan/zoom, fullscreen inspector overlays, and reset view
+  - Interactive 2D/3D relationship graph across temporal triples, episodic facts, and MEMORIA relationships with query filtering, ambient-label and legend controls, persistent selected-neighborhood predicates, gentle unrelated-node de-emphasis, empty-canvas deselection, connection highlighting, hover summaries, orbit/pan/zoom, fullscreen inspector overlays, and reset view
   - Clickable nodes and edges
   - Inspector panel with relation-store provenance
   - Structured-facts table with temporal, episodic, and MEMORIA source badges
