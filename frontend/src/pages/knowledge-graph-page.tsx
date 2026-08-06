@@ -12,10 +12,12 @@ import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { dashboardApi } from "@/lib/api"
+import type { NetworkColorMode } from "@/lib/network-appearance"
 import type { GraphData, GraphNode, Triple } from "@/lib/types"
 import { cn, formatDate } from "@/lib/utils"
 
 export function KnowledgeGraphPage({ databaseKey }: { databaseKey: string }) {
+  const [colorMode, setColorMode] = useState<NetworkColorMode>("category")
   const [dimension, setDimension] = useState<"2d" | "3d">("2d")
   const [query, setQuery] = useState("")
   const [graph, setGraph] = useState<GraphData>({ nodes: [], edges: [] })
@@ -73,7 +75,7 @@ export function KnowledgeGraphPage({ databaseKey }: { databaseKey: string }) {
             </Tabs>
           </div>
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
-            {dimension === "3d" ? <ThreeNetworkMap edges={graph.edges} fullscreenPanel={<KnowledgeInspector connected={connected} selected={selected} />} mode="graph" nodes={graph.nodes} onSelect={setSelected} selectedId={selected?.id} showEdgeLabels /> : <NetworkMap edges={graph.edges} emptyMessage="No structured knowledge relationships match this filter. Mnemosyne populates this map from temporal triples, episodic graph facts, and MEMORIA relationships." fullscreenPanel={<KnowledgeInspector connected={connected} selected={selected} />} mode="graph" nodes={graph.nodes} onSelect={setSelected} selectedId={selected?.id} showEdgeLabels />}
+            {dimension === "3d" ? <ThreeNetworkMap colorMode={colorMode} edges={graph.edges} fullscreenPanel={<KnowledgeInspector connected={connected} selected={selected} />} mode="graph" nodes={graph.nodes} onClearSelection={() => setSelected(null)} onColorModeChange={setColorMode} onSelect={setSelected} selectedId={selected?.id} showEdgeLabels /> : <NetworkMap colorMode={colorMode} edges={graph.edges} emptyMessage="No structured knowledge relationships match this filter. Mnemosyne populates this map from temporal triples, episodic graph facts, and MEMORIA relationships." fullscreenPanel={<KnowledgeInspector connected={connected} selected={selected} />} mode="graph" nodes={graph.nodes} onClearSelection={() => setSelected(null)} onColorModeChange={setColorMode} onSelect={setSelected} selectedId={selected?.id} showEdgeLabels />}
             <KnowledgeInspector className="border-t pt-5 xl:border-l xl:border-t-0 xl:pl-6" connected={connected} selected={selected} />
           </div>
         </TabsContent>

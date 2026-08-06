@@ -1,7 +1,9 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react"
-import { Maximize2, Minimize2, Pause, Play, RotateCcw, Tags } from "lucide-react"
+import { Maximize2, Minimize2, Palette, Pause, Play, RotateCcw, Tags } from "lucide-react"
 
+import { NetworkLegend } from "@/components/network-legend"
 import { Button } from "@/components/ui/button"
+import { networkColorModeLabel, networkNodeColor, type NetworkColorMode } from "@/lib/network-appearance"
 import { layoutNetwork, limitNetworkEdges, type NetworkMode, type SpatialNode } from "@/lib/network-layout"
 import type { GraphEdge, GraphNode } from "@/lib/types"
 
@@ -9,18 +11,24 @@ type RendererControls = { reset: () => void }
 type HoverTip = { detail: string; label: string; x: number; y: number }
 
 export function ThreeNetworkMap({
+  colorMode,
   edges,
   fullscreenPanel,
   mode,
   nodes,
+  onClearSelection,
+  onColorModeChange,
   onSelect,
   selectedId,
   showEdgeLabels = false,
 }: {
+  colorMode: NetworkColorMode
   edges: GraphEdge[]
   fullscreenPanel?: ReactNode
   mode: NetworkMode
   nodes: GraphNode[]
+  onClearSelection?: () => void
+  onColorModeChange: (mode: NetworkColorMode) => void
   onSelect?: (node: GraphNode) => void
   selectedId?: string
   showEdgeLabels?: boolean
@@ -28,6 +36,7 @@ export function ThreeNetworkMap({
   const containerRef = useRef<HTMLDivElement>(null)
   const hostRef = useRef<HTMLDivElement>(null)
   const controlsRef = useRef<RendererControls | null>(null)
+  const onClearSelectionRef = useRef(onClearSelection)
   const onSelectRef = useRef(onSelect)
   const selectedIdRef = useRef(selectedId)
   const labelsVisibleRef = useRef(true)
@@ -43,6 +52,7 @@ export function ThreeNetworkMap({
   const visibleEdges = useMemo(() => limitNetworkEdges(edges, spatial, mode), [edges, mode, spatial])
   const selectedNode = selectedId ? spatial.find((node) => node.id === selectedId) : undefined
 
+  useEffect(() => { onClearSelectionRef.current = onClearSelection }, [onClearSelection])
   useEffect(() => { onSelectRef.current = onSelect }, [onSelect])
   useEffect(() => { selectedIdRef.current = selectedId }, [selectedId])
   useEffect(() => { labelsVisibleRef.current = labelsVisible }, [labelsVisible])
@@ -96,7 +106,8 @@ export function ThreeNetworkMap({
         }
         const lineGeometry = new THREE.BufferGeometry()
         lineGeometry.setAttribute("position", new THREE.Float32BufferAttribute(linePositions, 3))
-        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x6f88a8, opacity: mode === "neural" ? 0.34 : 0.24, transparent: true })
+        const baseLineOpacity = mode === "neural" ? 0.34 : 0.24
+        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x6f88a8, opacity: baseLineOpacity, transparent: true })
         group.add(new THREE.LineSegments(lineGeometry, lineMaterial))
         const highlightGeometry = new THREE.BufferGeometry()
         const highlightMaterial = new THREE.LineBasicMaterial({ color: 0xe6a54a, depthTest: false, opacity: 0.98, transparent: true })
@@ -106,27 +117,20 @@ export function ThreeNetworkMap({
         group.add(highlightLines)
 
         const sphereGeometry = new THREE.SphereGeometry(1, 18, 12)
-        const glowGeometry = new THREE.SphereGeometry(1, 14, 10)
-        const meshes: Array<{ baseScale: number; glow: any; mesh: any; node: SpatialNode }> = []
-        const categories = [...new Set(spatial.map((node) => node.category || "Other"))]
+        const meshes: Array<{ baseOpacity: number; baseScale: number; color: string; mesh: any; node: SpatialNode }> = []
         for (const node of spatial) {
-          const color = nodeColor(node, mode, categories.indexOf(node.category || "Other"))
-          const material = new THREE.MeshBasicMaterial({ color, opacity: node.kind === "memory" ? 0.96 : 0.86, transparent: true })
+          const color = networkNodeColor(node, mode, colorMode)
+          const baseOpacity = node.kind === "memory" ? 0.96 : 0.86
+          const material = new THREE.MeshBasicMaterial({ color, opacity: baseOpacity, transparent: true })
           const mesh = new THREE.Mesh(sphereGeometry, material)
-          const glowMaterial = new THREE.MeshBasicMaterial({ blending: THREE.AdditiveBlending, color, depthWrite: false, opacity: mode === "graph" ? 0.08 : 0.14, transparent: true })
-          const glow = new THREE.Mesh(glowGeometry, glowMaterial)
           const baseScale = Math.max(3.4, node.radius * 1.25)
           mesh.position.set(node.x, node.y, node.z)
           mesh.scale.setScalar(baseScale)
-          glow.position.copy(mesh.position)
-          glow.scale.setScalar(baseScale * 2.15)
           mesh.userData.node = node
           group.add(mesh)
-          group.add(glow)
-          meshes.push({ baseScale, glow, mesh, node })
+          meshes.push({ baseOpacity, baseScale, color, mesh, node })
         }
         const meshById = new Map(meshes.map((item) => [item.node.id, item.mesh]))
-
         host.style.position = "relative"
         const labelLayer = document.createElement("div")
         labelLayer.setAttribute("aria-hidden", "true")
@@ -137,8 +141,8 @@ export function ThreeNetworkMap({
         labelLayer.style.zIndex = "4"
         host.append(labelLayer)
         const importantNodeIds = new Set([...spatial]
-          .sort((left, right) => (right.degree + Number(right.weight || right.count || 0)) - (left.degree + Number(left.weight || left.count || 0)))
-          .slice(0, mode === "graph" ? 24 : 18)
+          .sort((left, right) => spatialLabelPriority(right) - spatialLabelPriority(left))
+          .slice(0, mode === "graph" ? 36 : 28)
           .map((node) => node.id))
         const importantEdgeIds = new Set(visibleEdges
           .filter((edge) => edge.predicate || edge.label)
@@ -213,6 +217,7 @@ export function ThreeNetworkMap({
         const pick = (event: PointerEvent) => {
           const node = hitAt(event)
           if (node) onSelectRef.current?.(node)
+          else onClearSelectionRef.current?.()
         }
         const pointerDown = (event: PointerEvent) => {
           dragging = { moved: false, pitch, pointerId: event.pointerId, x: event.clientX, y: event.clientY, yaw }
@@ -244,7 +249,7 @@ export function ThreeNetworkMap({
         }
         const wheel = (event: WheelEvent) => {
           event.preventDefault()
-          cameraZ = Math.max(180, Math.min(1500, cameraZ * Math.exp(event.deltaY * 0.001)))
+          cameraZ = Math.max(180, Math.min(2600, cameraZ * Math.exp(event.deltaY * 0.001)))
         }
         const pointerLeave = () => setHoverTip(null)
         renderer.domElement.addEventListener("pointerdown", pointerDown)
@@ -274,6 +279,12 @@ export function ThreeNetworkMap({
           highlightGeometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3))
           if (positions.length) highlightGeometry.computeBoundingSphere()
           highlightLines.visible = positions.length > 0
+          lineMaterial.opacity = selection ? baseLineOpacity * 0.5 : baseLineOpacity
+          for (const item of meshes) {
+            const associated = !selection || connectedIds.has(item.node.id)
+            item.mesh.material.color.set(item.color)
+            item.mesh.material.opacity = associated ? item.baseOpacity : Math.max(0.34, item.baseOpacity * 0.46)
+          }
           highlightedFor = selection
         }
         const positionLabels = () => {
@@ -337,7 +348,6 @@ export function ThreeNetworkMap({
             const target = item.node.id === selectedIdRef.current ? item.baseScale * 1.55 : connectedIds.has(item.node.id) ? item.baseScale * 1.18 : item.baseScale
             const next = item.mesh.scale.x + (target - item.mesh.scale.x) * 0.16
             item.mesh.scale.setScalar(next)
-            item.glow.scale.setScalar(next * 2.15)
           }
           renderer.render(scene, camera)
           positionLabels()
@@ -355,7 +365,6 @@ export function ThreeNetworkMap({
           renderer.domElement.removeEventListener("pointerleave", pointerLeave)
           renderer.domElement.removeEventListener("wheel", wheel)
           sphereGeometry.dispose()
-          glowGeometry.dispose()
           lineGeometry.dispose()
           lineMaterial.dispose()
           highlightGeometry.dispose()
@@ -364,7 +373,6 @@ export function ThreeNetworkMap({
           starMaterial.dispose()
           for (const item of meshes) {
             item.mesh.material.dispose()
-            item.glow.material.dispose()
           }
           renderer.dispose()
           renderer.domElement.remove()
@@ -386,7 +394,7 @@ export function ThreeNetworkMap({
       cleanupRef.current?.()
       controlsRef.current = null
     }
-  }, [mode, showEdgeLabels, spatial, visibleEdges])
+  }, [colorMode, mode, showEdgeLabels, spatial, visibleEdges])
 
   const toggleFullscreen = async () => {
     if (!containerRef.current || !document.fullscreenEnabled) return
@@ -395,11 +403,12 @@ export function ThreeNetworkMap({
   }
 
   return (
-    <div className="relative min-h-[34rem] overflow-hidden rounded-lg border bg-[radial-gradient(circle_at_center,color-mix(in_oklch,var(--primary)_8%,transparent),transparent_62%)] fullscreen:min-h-screen fullscreen:rounded-none fullscreen:border-0" ref={containerRef}>
+    <div className="relative min-h-[34rem] overflow-hidden rounded-lg border bg-background/35 fullscreen:min-h-screen fullscreen:rounded-none fullscreen:border-0" ref={containerRef}>
       <div className="absolute right-3 top-3 z-10 flex gap-1 rounded-md border bg-background/90 p-1 shadow-sm backdrop-blur">
         <Button aria-label={paused ? "Resume rotation" : "Pause rotation"} onClick={() => setPaused((value) => !value)} size="icon" variant="ghost">{paused ? <Play /> : <Pause />}</Button>
         <Button aria-label="Reset 3D view" onClick={() => controlsRef.current?.reset()} size="icon" variant="ghost"><RotateCcw /></Button>
-        <Button aria-label={labelsVisible ? "Hide labels" : "Show labels"} aria-pressed={labelsVisible} onClick={() => setLabelsVisible((value) => !value)} size="icon" variant={labelsVisible ? "secondary" : "ghost"}><Tags /></Button>
+        <Button aria-label={`Color by ${colorMode === "type" ? (mode === "graph" ? "source" : "category") : "type"}`} onClick={() => onColorModeChange(colorMode === "type" ? "category" : "type")} size="sm" title={`Currently colored by ${networkColorModeLabel(mode, colorMode).toLowerCase()}`} variant="ghost"><Palette /><span className="hidden lg:inline">{networkColorModeLabel(mode, colorMode)}</span></Button>
+        <Button aria-label={labelsVisible ? "Hide priority labels" : "Show priority labels"} aria-pressed={labelsVisible} onClick={() => setLabelsVisible((value) => !value)} size="icon" title="Labels prioritize larger and more connected nodes; selected neighborhoods are always labeled." variant={labelsVisible ? "secondary" : "ghost"}><Tags /></Button>
         {document.fullscreenEnabled ? <Button aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"} onClick={() => void toggleFullscreen()} size="icon" variant="ghost">{fullscreen ? <Minimize2 /> : <Maximize2 />}</Button> : null}
       </div>
       <div className={fullscreen ? "h-screen" : "h-[34rem]"} ref={hostRef} />
@@ -407,21 +416,15 @@ export function ThreeNetworkMap({
       {error ? <div className="absolute inset-0 grid place-items-center px-8 text-center"><p className="max-w-md text-sm leading-6 text-muted-foreground">3D view unavailable: {error}. The 2D view remains available.</p></div> : null}
       {hoverTip ? <div className="pointer-events-none absolute z-20 max-w-64 rounded-md border bg-popover/95 px-2.5 py-2 text-xs shadow-lg backdrop-blur" style={{ left: Math.max(8, Math.min(hoverTip.x, (containerRef.current?.clientWidth || 320) - 270)), top: Math.max(8, Math.min(hoverTip.y, (containerRef.current?.clientHeight || 320) - 72)) }}><p className="truncate font-medium text-popover-foreground">{hoverTip.label}</p><p className="mt-0.5 truncate text-muted-foreground">{hoverTip.detail}</p></div> : null}
       {fullscreen && fullscreenPanel ? <div className="absolute inset-x-4 bottom-4 z-10 max-h-[44vh] overflow-auto rounded-lg border bg-background/94 p-5 shadow-2xl backdrop-blur-xl md:inset-y-16 md:left-auto md:w-[23rem] md:max-h-none">{fullscreenPanel}</div> : null}
-      {selectedNode && (!fullscreen || !fullscreenPanel) ? <div className="pointer-events-none absolute bottom-4 left-4 max-w-sm border-l-2 border-primary bg-background/90 px-4 py-3 text-sm shadow-lg backdrop-blur"><p className="font-semibold">{selectedNode.label}</p><p className="mt-1 text-xs text-muted-foreground">{selectedNode.kind || "entity"}{selectedNode.category ? ` · ${selectedNode.category}` : ""} · {selectedNode.degree} connections</p></div> : null}
+      {selectedNode && !fullscreenPanel ? <div className="pointer-events-none absolute bottom-4 left-4 max-w-sm border-l-2 border-primary bg-background/90 px-4 py-3 text-sm shadow-lg backdrop-blur"><p className="font-semibold">{selectedNode.label}</p><p className="mt-1 text-xs text-muted-foreground">{selectedNode.kind || "entity"}{selectedNode.category ? ` · ${selectedNode.category}` : ""} · {selectedNode.degree} connections</p></div> : null}
+      <NetworkLegend colorMode={colorMode} mode={mode} nodes={nodes} />
       <p className="pointer-events-none absolute bottom-3 right-3 hidden text-xs text-muted-foreground sm:block">Drag to orbit · scroll to zoom · select a node to inspect</p>
     </div>
   )
 }
 
-function clusterColor(index: number) {
-  const colors = [0x76b8d8, 0x78c8ad, 0x9d91d4, 0xd39b78, 0x82a6d8, 0xb9a66f, 0x79b8b4]
-  return colors[Math.abs(index) % colors.length]
-}
-
-function nodeColor(node: SpatialNode, mode: NetworkMode, categoryIndex: number) {
-  if (mode === "constellation") return node.kind === "memory" ? 0xe6a54a : 0x57c4ff
-  if (mode === "neural") return node.kind === "memory" ? 0xff6b5d : 0x60e2c0
-  return clusterColor(categoryIndex)
+function spatialLabelPriority(node: SpatialNode) {
+  return node.radius * 8 + node.degree * 2.4 + Math.log2(1 + Number(node.weight || node.count || 0))
 }
 
 function createMapLabel(text: string, kind: "edge" | "node") {

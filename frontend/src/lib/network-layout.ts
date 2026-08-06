@@ -77,33 +77,49 @@ export function limitNetworkEdges(edges: GraphEdge[], nodes: SpatialNode[], mode
 }
 
 function layoutConstellation(nodes: GraphNode[], degree: Map<string, number>): SpatialNode[] {
-  const categories = [...new Set(nodes.map((node) => node.category || "Other"))]
+  const categoryCounts = new Map<string, number>()
+  for (const node of nodes) categoryCounts.set(node.category || "Other", (categoryCounts.get(node.category || "Other") || 0) + 1)
+  const categories = [...categoryCounts.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])).map(([category]) => category)
   const categoryIndex = new Map(categories.map((category, index) => [category, index]))
-  return nodes.map((node, index) => {
+  const clusterCenters = new Map(categories.map((category, index) => {
+    if (categories.length === 1) return [category, { x: 0, y: 0, z: 0 }]
+    const latitude = Math.acos(1 - 2 * ((index + 0.5) / categories.length))
+    const longitude = index * 2.399963
+    const radius = 168 + Math.floor(index / 12) * 34
+    return [category, {
+      x: Math.cos(longitude) * Math.sin(latitude) * radius,
+      y: Math.cos(latitude) * radius * 0.82,
+      z: Math.sin(longitude) * Math.sin(latitude) * radius,
+    }]
+  }))
+  const rankByCategory = new Map<string, number>()
+  return nodes.map((node) => {
     const category = node.category || "Other"
     const cluster = categoryIndex.get(category) || 0
+    const center = clusterCenters.get(category) || { x: 0, y: 0, z: 0 }
+    const rank = rankByCategory.get(category) || 0
+    rankByCategory.set(category, rank + 1)
     const weight = Math.max(1, Number(node.weight || node.count || 1))
-    const shell = node.kind === "memory" ? 1.08 : 0.72 + (cluster % 3) * 0.1
-    const distance = 250 * shell + (index % 7) * 15 + Math.min(42, Math.sqrt(weight) * 5)
-    const longitude = ((index * 137.508 + cluster * 23) % 360) * Math.PI / 180
-    const latitudeSeed = (((index * 53 + cluster * 29) % 101) + 0.5) / 101
-    const latitude = Math.acos(1 - 2 * latitudeSeed) - Math.PI / 2
-    const radial = Math.cos(latitude)
-    const orbitBias = Math.sin((index / Math.max(nodes.length, 1)) * Math.PI * 2 + cluster * 0.62) * 20
+    const distance = rank === 0 ? 0 : 26 + Math.sqrt(rank) * 22 + Math.min(26, Math.sqrt(weight) * 3)
+    const longitude = ((rank * 137.508 + cluster * 29) % 360) * Math.PI / 180
+    const vertical = rank === 0 ? 0 : ((((rank * 47 + cluster * 17) % 101) + 0.5) / 101) * 2 - 1
+    const radial = Math.sqrt(Math.max(0, 1 - vertical * vertical))
     const nodeDegree = degree.get(node.id) || 0
     return {
       ...node,
       degree: nodeDegree,
       radius: Math.min(13, 3.8 + Math.sqrt(weight + nodeDegree) * 1.75),
-      x: Math.cos(longitude) * radial * distance,
-      y: Math.sin(latitude) * distance * 0.9 + orbitBias,
-      z: Math.sin(longitude) * radial * distance * 1.08 + Math.cos(longitude * 1.7 + cluster) * 46,
+      x: center.x + Math.cos(longitude) * radial * distance,
+      y: center.y + vertical * distance * 0.88,
+      z: center.z + Math.sin(longitude) * radial * distance,
     }
   })
 }
 
 function layoutNeural(nodes: GraphNode[], edges: GraphEdge[], degree: Map<string, number>): SpatialNode[] {
-  const categories = [...new Set(nodes.map((node) => node.category || "Other"))]
+  const categoryCounts = new Map<string, number>()
+  for (const node of nodes) categoryCounts.set(node.category || "Other", (categoryCounts.get(node.category || "Other") || 0) + 1)
+  const categories = [...categoryCounts.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])).map(([category]) => category)
   const categoryIndex = new Map(categories.map((category, index) => [category, index]))
   const regionCount = Math.max(1, categories.length)
   const regions = new Map(categories.map((category, index) => {
