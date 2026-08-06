@@ -1,11 +1,21 @@
 # Mnemosyne Dashboard
 
+<p align="center">
+  <img src="static/mnemosyne-avatar-256.png" alt="Mnemosyne portrait mark" width="128" height="128">
+</p>
+
 A local-first web dashboard for browsing, visualising, and safely maintaining a Mnemosyne memory store, with optional Hermes Agent plugin integration.
 
 It is intentionally local-first: the Python standard-library server makes no
 cloud calls and keeps memory browsing read-only by default. Optional
 password-gated maintenance mode supports safe Mnemosyne-style memory
 supersession/expiry without hard deletes or raw overwrite edits.
+
+![Mnemosyne Dashboard overview in dark mode](docs/screenshots/desktop-dark-overview.png)
+
+The interface above uses a synthetic mock Mnemosyne database. It does not
+contain private memory data. See the [complete screenshot gallery](#screenshots)
+for desktop and mobile views of the memory maps and maintenance workflows.
 
 The source-owned React interface is the default at `/`, with Radix interaction
 semantics, shadcn/ui-inspired open components, and a celestial token system.
@@ -117,10 +127,13 @@ The screenshots below are generated from a synthetic mock Mnemosyne database. Th
 | Desktop dark mode | Mobile dark mode |
 | --- | --- |
 | ![Desktop overview with activity and memory map](docs/screenshots/desktop-dark-overview.png) | ![Mobile overview](docs/screenshots/mobile-dark-overview.png) |
+| ![Desktop daily memory digest](docs/screenshots/desktop-dark-today.png) | ![Mobile daily memory digest](docs/screenshots/mobile-dark-today.png) |
 | ![Desktop memory constellation](docs/screenshots/desktop-dark-constellation.png) | ![Mobile memory constellation](docs/screenshots/mobile-dark-constellation.png) |
 | ![Desktop neural memory map](docs/screenshots/desktop-dark-neural.png) | ![Mobile neural memory map](docs/screenshots/mobile-dark-neural.png) |
 | ![Desktop knowledge graph](docs/screenshots/desktop-dark-graph.png) | ![Mobile knowledge graph](docs/screenshots/mobile-dark-graph.png) |
 | ![Desktop memory browser](docs/screenshots/desktop-dark-search.png) | ![Mobile memory browser](docs/screenshots/mobile-dark-search.png) |
+| ![Desktop memory timeline](docs/screenshots/desktop-dark-timeline.png) | ![Mobile memory timeline](docs/screenshots/mobile-dark-timeline.png) |
+| ![Desktop Persona and Facts view](docs/screenshots/desktop-dark-profile.png) | ![Mobile Persona and Facts view](docs/screenshots/mobile-dark-profile.png) |
 | ![Desktop settings](docs/screenshots/desktop-dark-settings.png) | ![Mobile settings](docs/screenshots/mobile-dark-settings.png) |
 
 Regenerate the gallery locally with:
