@@ -99,14 +99,27 @@ def test_favicon_route_serves_icon_without_404(tmp_path, monkeypatch):
         server.close()
 
 
-def test_candidate_dashboard_route_serves_parallel_react_app(tmp_path, monkeypatch):
+def test_react_dashboard_is_default_and_candidate_alias_is_retained(tmp_path, monkeypatch):
     server = ServerHarness(tmp_path, monkeypatch)
     try:
-        status, headers, body = _request(f"{server.base}/candidate?page=overview")
+        for path in ("/?page=overview", "/candidate?page=overview"):
+            status, headers, body = _request(f"{server.base}{path}")
+            assert status == 200
+            assert headers["Content-Type"].startswith("text/html")
+            assert b'<title>Mnemosyne Dashboard</title>' in body
+            assert b'/static/candidate/assets/' in body
+    finally:
+        server.close()
+
+
+def test_legacy_dashboard_remains_available_as_fallback(tmp_path, monkeypatch):
+    server = ServerHarness(tmp_path, monkeypatch)
+    try:
+        status, headers, body = _request(f"{server.base}/legacy?tab=overview")
         assert status == 200
         assert headers["Content-Type"].startswith("text/html")
-        assert b'Mnemosyne Dashboard Candidate' in body
-        assert b'/static/candidate/assets/' in body
+        assert b'<script src="/static/app.js' in body
+        assert b'id="overview"' in body
     finally:
         server.close()
 

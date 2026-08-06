@@ -92,7 +92,7 @@ export function NetworkMap({
 
   return (
     <div
-      className={cn("relative overflow-hidden rounded-lg border bg-background/35 shadow-inner shadow-black/5", preview ? "min-h-[22rem]" : "min-h-[28rem] fullscreen:min-h-screen fullscreen:rounded-none fullscreen:border-0")}
+      className={cn("relative overflow-hidden rounded-lg border bg-background/35 shadow-inner shadow-black/5 fullscreen:bg-background", preview ? "min-h-[22rem]" : "min-h-[28rem] fullscreen:min-h-screen fullscreen:rounded-none fullscreen:border-0")}
       data-network-mode={mode}
       ref={containerRef}
     >

@@ -261,7 +261,10 @@ class ChromeSession:
             except Exception:
                 time.sleep(0.2)
         tab = next(tab for tab in tabs if tab.get("type") == "page")
-        self.ws = websocket.create_connection(tab["webSocketDebuggerUrl"], timeout=10)
+        # Some slower machines need more than one API round-trip window before
+        # React resolves the active profile. Keep the CDP socket open through
+        # the explicit readiness checks in prepare().
+        self.ws = websocket.create_connection(tab["webSocketDebuggerUrl"], timeout=30)
         self.call("Page.enable")
         self.call("Runtime.enable")
         self.call(
@@ -293,69 +296,83 @@ class ChromeSession:
                 return msg
 
     def prepare(self, theme: str, tab: str) -> dict[str, Any]:
+        page_map = {
+            "overview": "overview",
+            "today": "today",
+            "profile": "context",
+            "constellation": "visualizer",
+            "neural": "visualizer",
+            "search": "memories",
+            "graph": "graph",
+            "timelineView": "history",
+            "settings": "settings",
+        }
+        page = page_map.get(tab, tab)
+        query = urllib.parse.urlencode({"page": page, **({"q": "dashboard"} if tab == "search" else {})})
         self.call("Page.navigate", {"url": self.url})
+        self.call("Page.loadEventFired")
+        self.call(
+            "Runtime.evaluate",
+            {"expression": f"localStorage.setItem('mnemosyne-dashboard-theme', {json.dumps(theme)})"},
+        )
+        self.call("Page.navigate", {"url": f"{self.url}?{query}"})
         self.call("Page.loadEventFired")
         expr = f"""
         (async()=>{{
-          for (let i = 0; i < 80 && typeof switchTab !== 'function'; i++) {{
+          for (let i = 0; i < 100 && !document.querySelector('main h1'); i++) {{
             await new Promise(r=>setTimeout(r,100));
           }}
-          localStorage.setItem('mnemosyne-dashboard-theme', {json.dumps(theme)});
-          if (typeof setTheme === 'function') setTheme({json.dumps(theme)});
-          if (typeof switchTab !== 'function') throw new Error('dashboard JS did not initialise');
-          switchTab({json.dumps(tab if tab != 'neural' else 'constellation')});
-          if ({json.dumps(tab)} === 'constellation' && typeof switchVisualiserMode === 'function') {{
-            switchVisualiserMode('constellation');
+          if (!document.querySelector('main h1')) throw new Error('React dashboard did not initialise');
+          const databaseSelector = () => document.querySelector('[aria-label="Active memory database"]');
+          const databaseLabel = () => databaseSelector()?.querySelector('span.flex-1')?.textContent?.trim() || '';
+          for (let i = 0; i < 150; i++) {{
+            const label = databaseLabel();
+            if (label && !label.startsWith('Loading')) break;
+            await new Promise(r=>setTimeout(r,100));
           }}
-          if ({json.dumps(tab)} === 'neural' && typeof switchVisualiserMode === 'function') {{
-            switchVisualiserMode('neural');
+          const loadedDatabaseLabel = databaseLabel();
+          if (!loadedDatabaseLabel || loadedDatabaseLabel.startsWith('Loading')) {{
+            throw new Error('Active memory database did not finish loading');
           }}
-          await new Promise(r=>setTimeout(r,900));
-          if ({json.dumps(tab)} === 'search') {{
-            document.querySelector('#globalSearchQuery').value = 'dashboard';
-            await loadGlobalSearch();
+          let neuralCenter = null;
+          if ({json.dumps(tab)} === 'neural') {{
+            const neural = [...document.querySelectorAll('[role="tab"]')].find(button => button.textContent?.trim() === 'Neural map');
+            if (!neural) throw new Error('Neural map tab was not found');
+            const rect = neural.getBoundingClientRect();
+            neuralCenter = {{x: rect.left + rect.width / 2, y: rect.top + rect.height / 2}};
           }}
-          if ({json.dumps(tab)} === 'recall') {{
-            document.querySelector('#recallQuery').value = 'mobile';
-            await loadRecallDebug();
-          }}
-          if ({json.dumps(tab)} === 'timelineView') {{
-            document.querySelector('#timelineGroup').value = 'session';
-            await loadTimeline();
-          }}
-          if ({json.dumps(tab)} === 'graph') {{
-            document.querySelector('#graphQuery').value = 'dashboard';
-            await loadGraph();
-          }}
-          if ({json.dumps(tab)} === 'triples') {{
-            document.querySelector('#tripleQuery').value = 'theme';
-            await loadTriples();
-          }}
-          if ({json.dumps(tab)} === 'memories') {{
-            document.querySelector('#memoryQuery').value = 'mobile';
-            await loadMemories();
-          }}
-          if ({json.dumps(tab)} === 'consolidations') {{
-            document.querySelector('#consolidationQuery').value = 'mobile';
-            await loadConsolidations();
-          }}
-          if ({json.dumps(tab)} === 'today') {{
-            await loadTodayDigest('2026-05-04');
-          }}
-          if ({json.dumps(tab)} === 'profile') {{
-            await loadProfile();
-          }}
-          if ({json.dumps(tab)} === 'constellation') {{
-            await loadConstellation();
-          }}
-          await new Promise(r=>setTimeout(r,1200));
           window.scrollTo(0,0);
           const doc = document.documentElement;
-          return {{scrollWidth: doc.scrollWidth, clientWidth: doc.clientWidth, title: document.title}};
+          return {{scrollWidth: doc.scrollWidth, clientWidth: doc.clientWidth, title: document.title, page: {json.dumps(page)}, database: loadedDatabaseLabel, neuralCenter}};
         }})()
         """
         res = self.call("Runtime.evaluate", {"expression": expr, "awaitPromise": True, "returnByValue": True})
-        return res["result"]["result"].get("value", {})
+        evaluation = res.get("result", {})
+        remote = evaluation.get("result", {})
+        if "exceptionDetails" in evaluation or "value" not in remote:
+            description = remote.get("description", "React screenshot preparation failed")
+            raise RuntimeError(description)
+        metrics = remote["value"]
+        neural_center = metrics.pop("neuralCenter", None)
+        if tab == "neural":
+            if not neural_center:
+                raise RuntimeError("Neural map tab coordinates were not resolved")
+            pointer = {"x": neural_center["x"], "y": neural_center["y"], "button": "left", "clickCount": 1}
+            self.call("Input.dispatchMouseEvent", {"type": "mousePressed", **pointer})
+            self.call("Input.dispatchMouseEvent", {"type": "mouseReleased", **pointer})
+        settled = self.call(
+            "Runtime.evaluate",
+            {
+                "expression": "(async()=>{await new Promise(r=>setTimeout(r,2200)); return document.querySelector('[role=tab][aria-selected=true]')?.textContent?.trim() || '';})()",
+                "awaitPromise": True,
+                "returnByValue": True,
+            },
+        )
+        selected_tab = settled.get("result", {}).get("result", {}).get("value", "")
+        if tab == "neural" and selected_tab != "Neural map":
+            raise RuntimeError(f"Neural map tab did not activate (selected: {selected_tab or 'none'})")
+        metrics["selected_tab"] = selected_tab
+        return metrics
 
     def screenshot(self, path: Path) -> None:
         data = self.call("Page.captureScreenshot", {"format": "png", "captureBeyondViewport": False})["result"]["data"]
@@ -377,8 +394,13 @@ def wait_for_server(url: str) -> None:
 def run() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     TMP_DIR.mkdir(parents=True, exist_ok=True)
-    db_path = TMP_DIR / "mock-mnemosyne.db"
+    db_path = TMP_DIR / "hermes" / "profiles" / "demo" / "mnemosyne" / "data" / "mnemosyne.db"
     make_mock_db(db_path)
+    config_path = TMP_DIR / "config.json"
+    config_path.write_text(
+        json.dumps({"db_path": str(db_path), "db_paths": [], "auth_enabled": False}),
+        encoding="utf-8",
+    )
     port = free_port()
     base_url = f"http://127.0.0.1:{port}/"
     server = subprocess.Popen(
@@ -387,28 +409,32 @@ def run() -> None:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
-        env={**os.environ, "MNEMOSYNE_DASHBOARD_CONFIG": str(TMP_DIR / "config.json")},
+        env={
+            **os.environ,
+            "HERMES_HOME": str(TMP_DIR / "hermes"),
+            "MNEMOSYNE_DASHBOARD_CONFIG": str(config_path),
+        },
     )
     try:
         wait_for_server(f"{base_url}api/health")
         shots = [
             ("desktop-dark-overview.png", 1440, 1000, False, "dark", "overview"),
-            ("desktop-light-overview.png", 1440, 1000, False, "light", "overview"),
             ("desktop-dark-today.png", 1440, 1000, False, "dark", "today"),
-            ("desktop-light-profile.png", 1440, 1000, False, "light", "profile"),
+            ("desktop-dark-profile.png", 1440, 1000, False, "dark", "profile"),
             ("desktop-dark-constellation.png", 1440, 1000, False, "dark", "constellation"),
             ("desktop-dark-neural.png", 1440, 1000, False, "dark", "neural"),
             ("desktop-dark-search.png", 1440, 1000, False, "dark", "search"),
-            ("desktop-light-graph.png", 1440, 1000, False, "light", "graph"),
+            ("desktop-dark-graph.png", 1440, 1000, False, "dark", "graph"),
             ("desktop-dark-timeline.png", 1440, 1000, False, "dark", "timelineView"),
+            ("desktop-dark-settings.png", 1440, 1000, False, "dark", "settings"),
             ("mobile-dark-overview.png", 390, 844, True, "dark", "overview"),
-            ("mobile-light-today.png", 390, 844, True, "light", "today"),
+            ("mobile-dark-today.png", 390, 844, True, "dark", "today"),
             ("mobile-dark-profile.png", 390, 844, True, "dark", "profile"),
-            ("mobile-light-constellation.png", 390, 844, True, "light", "constellation"),
+            ("mobile-dark-constellation.png", 390, 844, True, "dark", "constellation"),
             ("mobile-dark-neural.png", 390, 844, True, "dark", "neural"),
-            ("mobile-light-search.png", 390, 844, True, "light", "search"),
+            ("mobile-dark-search.png", 390, 844, True, "dark", "search"),
             ("mobile-dark-timeline.png", 390, 844, True, "dark", "timelineView"),
-            ("mobile-light-graph.png", 390, 844, True, "light", "graph"),
+            ("mobile-dark-graph.png", 390, 844, True, "dark", "graph"),
             ("mobile-dark-settings.png", 390, 844, True, "dark", "settings"),
         ]
         manifest: list[dict[str, Any]] = []

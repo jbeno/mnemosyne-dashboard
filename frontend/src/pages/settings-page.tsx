@@ -10,17 +10,18 @@ import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { dashboardApi } from "@/lib/api"
-import type { DashboardConfig, Diagnostics, RealtimeStatus, RuntimeStatus } from "@/lib/types"
+import type { AuditEntry, DashboardConfig, Diagnostics, RealtimeStatus, RuntimeStatus } from "@/lib/types"
 import { formatDate } from "@/lib/utils"
 
 type ConfigForm = Pick<DashboardConfig, "host" | "port" | "db_path" | "auth_enabled" | "memory_admin_enabled"> & { password: string }
 
-export function SettingsPage({ databaseKey }: { databaseKey: string }) {
+export function SettingsPage({ databaseKey, onAuthStatusChange }: { databaseKey: string; onAuthStatusChange: () => Promise<void> }) {
   const [config, setConfig] = useState<DashboardConfig | null>(null)
   const [form, setForm] = useState<ConfigForm | null>(null)
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null)
   const [runtime, setRuntime] = useState<RuntimeStatus | null>(null)
   const [realtime, setRealtime] = useState<RealtimeStatus | null>(null)
+  const [audit, setAudit] = useState<AuditEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -36,6 +37,10 @@ export function SettingsPage({ databaseKey }: { databaseKey: string }) {
       setDiagnostics(nextDiagnostics)
       setRuntime(nextRuntime)
       setRealtime(nextRealtime)
+      if (configResponse.config.memory_admin_enabled) {
+        const auditResponse = await dashboardApi.audit().catch(() => ({ items: [] as AuditEntry[] }))
+        setAudit(auditResponse.items)
+      } else setAudit([])
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Dashboard settings could not be loaded.")
     } finally {
@@ -57,6 +62,9 @@ export function SettingsPage({ databaseKey }: { databaseKey: string }) {
       setConfig(response.config)
       setForm((current) => current ? { ...current, password: "" } : current)
       setMessage(response.message)
+      if (response.config.memory_admin_enabled) setAudit((await dashboardApi.audit().catch(() => ({ items: [] as AuditEntry[] }))).items)
+      else setAudit([])
+      await onAuthStatusChange()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Settings could not be saved.")
     } finally {
@@ -71,6 +79,7 @@ export function SettingsPage({ databaseKey }: { databaseKey: string }) {
     try {
       const response = await dashboardApi.backup()
       setMessage(`Backup created at ${response.backup.path}`)
+      setAudit((await dashboardApi.audit().catch(() => ({ items: [] as AuditEntry[] }))).items)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The database backup could not be created.")
     } finally {
@@ -91,7 +100,7 @@ export function SettingsPage({ databaseKey }: { databaseKey: string }) {
       {error ? <div className="flex items-start gap-3 border-l-2 border-destructive bg-destructive/5 px-4 py-3 text-sm" role="alert"><ShieldAlert className="mt-0.5 size-4 shrink-0 text-destructive" /><span>{error}</span></div> : null}
 
       <Tabs defaultValue="general">
-        <TabsList aria-label="Settings section"><TabsTrigger value="general">General</TabsTrigger><TabsTrigger value="diagnostics">Diagnostics</TabsTrigger><TabsTrigger value="realtime">Realtime</TabsTrigger></TabsList>
+        <TabsList aria-label="Settings section"><TabsTrigger value="general">General</TabsTrigger><TabsTrigger value="maintenance">Maintenance</TabsTrigger><TabsTrigger value="diagnostics">Diagnostics</TabsTrigger><TabsTrigger value="realtime">Realtime</TabsTrigger></TabsList>
         <TabsContent className="pt-7" value="general">
           <form className="max-w-4xl space-y-9" onSubmit={(event) => { event.preventDefault(); void save() }}>
             <fieldset className="grid gap-5 sm:grid-cols-2">
@@ -110,6 +119,9 @@ export function SettingsPage({ databaseKey }: { databaseKey: string }) {
 
             <div className="flex flex-wrap gap-3"><Button disabled={saving || !form} type="submit">{saving ? "Saving…" : "Save settings"}</Button><Button disabled={saving || !config?.memory_admin_enabled} onClick={() => void backup()} type="button" variant="outline"><DatabaseBackup />Create database backup</Button></div>
           </form>
+        </TabsContent>
+        <TabsContent className="pt-7" value="maintenance">
+          <section className="max-w-5xl"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><h2 className="text-lg font-semibold">Audited memory maintenance</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">Every trust, importance, expiry, invalidation, and supersession action is appended to the local audit log. Database backups remain the default.</p></div><Button disabled={saving || !config?.memory_admin_enabled} onClick={() => void backup()} type="button" variant="outline"><DatabaseBackup />Create database backup</Button></div>{!config?.memory_admin_enabled ? <p className="mt-6 border-l-2 border-primary/45 bg-primary/5 px-4 py-3 text-sm">Memory admin mode is disabled. Enable it under General only when maintenance is intentional.</p> : <><div className="mt-8 flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">Recent audit activity</h3><span className="text-xs tabular-nums text-muted-foreground">{audit.length} entries</span></div><Table className="mt-3"><TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Action</TableHead><TableHead>Memory</TableHead><TableHead>Result</TableHead></TableRow></TableHeader><TableBody>{audit.map((entry, index) => <TableRow key={`${entry.timestamp || "audit"}-${index}`}><TableCell className="whitespace-nowrap text-muted-foreground">{formatDate(entry.timestamp)}</TableCell><TableCell><Badge variant="outline">{entry.action || "record"}</Badge></TableCell><TableCell className="max-w-56 truncate font-mono text-xs">{entry.memory_id || "—"}</TableCell><TableCell className="max-w-lg truncate text-muted-foreground">{auditResult(entry)}</TableCell></TableRow>)}</TableBody></Table>{!audit.length ? <p className="border-t py-8 text-sm text-muted-foreground">No audited maintenance actions have been recorded.</p> : null}</>}</section>
         </TabsContent>
         <TabsContent className="pt-7" value="diagnostics">
           <div className="grid gap-10 xl:grid-cols-2">
@@ -140,3 +152,4 @@ function setFormValue<K extends keyof ConfigForm>(setForm: React.Dispatch<React.
 
 function yesNo(value: boolean | undefined) { return value === undefined ? "—" : value ? "Yes" : "No" }
 function formatBytes(value: number) { if (!value) return "0 B"; const units = ["B", "KB", "MB", "GB"]; const order = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1); return `${(value / 1024 ** order).toFixed(order ? 1 : 0)} ${units[order]}` }
+function auditResult(entry: AuditEntry) { const extra = entry.extra || {}; if (extra.replacement_id) return `Replacement ${String(extra.replacement_id)}`; if (extra.veracity) return `Trust ${String(extra.veracity)}`; if (extra.importance !== undefined) return `Importance ${Number(extra.importance).toFixed(2)}`; if (extra.valid_until !== undefined) return extra.valid_until ? `Expiry ${String(extra.valid_until)}` : "Expiry cleared"; const backup = extra.backup as { path?: string } | null | undefined; return backup?.path ? `Backup ${backup.path}` : entry.raw || "Completed" }

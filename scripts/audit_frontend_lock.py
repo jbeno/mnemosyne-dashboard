@@ -8,7 +8,6 @@ import csv
 import re
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 LOCK_ENTRY = re.compile(r'^\s{4}"(?P<name>[^"]+)"\s*:\s*\["(?P<resolved>[^"]+)"')
 

@@ -1,4 +1,4 @@
-import type { ActivitySeries, CanonicalData, ConstellationData, DashboardConfig, Databases, Diagnostics, GraphData, InferredProfileData, JsonRecord, LifecycleData, MemoriaStats, Memory, MemoryQuery, PatternsData, PersonaData, RealtimeStatus, ReviewData, RuntimeStatus, Stats, TimelineData, TodayDigest, Triple } from "@/lib/types"
+import type { ActivitySeries, AuditEntry, AuthStatus, CanonicalData, ConstellationData, DashboardConfig, Databases, Diagnostics, GraphData, InferredProfileData, JsonRecord, LifecycleData, MemoriaStats, Memory, MemoryQuery, PatternsData, PersonaData, RealtimeStatus, ReviewData, RuntimeStatus, Stats, TimelineData, TodayDigest, Triple } from "@/lib/types"
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -14,6 +14,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const dashboardApi = {
+  authStatus: () => request<AuthStatus>("/api/auth/status"),
+  login: (password: string) => request<AuthStatus>("/api/auth/login", { method: "POST", body: JSON.stringify({ password }) }),
+  logout: () => request<{ ok: boolean }>("/api/auth/logout", { method: "POST", body: "{}" }),
   stats: () => request<Stats>("/api/stats"),
   activitySeries: (days = 30) => request<ActivitySeries>(`/api/activity-series?days=${days}`),
   databases: () => request<Databases>("/api/databases"),
@@ -24,6 +27,7 @@ export const dashboardApi = {
     }),
   today: () => request<TodayDigest>("/api/digest/today?limit=80"),
   memories: (query: MemoryQuery) => request<{ items: Memory[] }>(`/api/memories?${new URLSearchParams(query).toString()}`),
+  memory: (id: string) => request<{ item: Memory }>(`/api/memory?${new URLSearchParams({ id }).toString()}`),
   review: (query: Record<string, string>) => request<ReviewData>(`/api/review?${new URLSearchParams(query).toString()}`),
   lifecycle: () => request<LifecycleData>("/api/lifecycle?limit=80"),
   timeline: (query: Record<string, string>) => request<TimelineData>(`/api/timeline?${new URLSearchParams(query).toString()}`),
@@ -42,4 +46,10 @@ export const dashboardApi = {
   runtimeStatus: () => request<RuntimeStatus>("/api/runtime/status"),
   realtimeStatus: () => request<RealtimeStatus>("/api/realtime/status"),
   backup: () => request<{ ok: boolean; backup: { path: string } }>("/api/admin/backup", { method: "POST", body: "{}" }),
+  audit: (limit = 100) => request<{ items: AuditEntry[] }>(`/api/admin/audit?limit=${limit}`),
+  invalidateMemory: (memoryId: string, backup = true) => request<{ ok: boolean; item?: Memory; backup?: { path: string } }>("/api/admin/memory/invalidate", { method: "POST", body: JSON.stringify({ memory_id: memoryId, backup }) }),
+  setMemoryImportance: (memoryId: string, importance: number, backup = true) => request<{ ok: boolean; item: Memory; importance: number }>("/api/admin/memory/importance", { method: "POST", body: JSON.stringify({ memory_id: memoryId, importance, backup }) }),
+  setMemoryVeracity: (memoryId: string, veracity: string, backup = true) => request<{ ok: boolean; item: Memory; veracity: string }>("/api/admin/memory/veracity", { method: "POST", body: JSON.stringify({ memory_id: memoryId, veracity, backup }) }),
+  setMemoryExpiry: (memoryId: string, validUntil: string, backup = true) => request<{ ok: boolean; item: Memory; valid_until: string }>("/api/admin/memory/expiry", { method: "POST", body: JSON.stringify({ memory_id: memoryId, valid_until: validUntil, backup }) }),
+  supersedeMemory: (memoryId: string, content: string, importance: number, backup = true) => request<{ ok: boolean; replacement_id: string; backup?: { path: string } }>("/api/admin/memory/supersede", { method: "POST", body: JSON.stringify({ memory_id: memoryId, content, importance, backup }) }),
 }

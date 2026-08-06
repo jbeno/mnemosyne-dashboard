@@ -6,16 +6,10 @@
     "viewport": "1440x1000",
     "scrollWidth": 1440,
     "clientWidth": 1440,
-    "title": "Mnemosyne Dashboard"
-  },
-  {
-    "file": "desktop-light-overview.png",
-    "theme": "light",
-    "tab": "overview",
-    "viewport": "1440x1000",
-    "scrollWidth": 1440,
-    "clientWidth": 1440,
-    "title": "Mnemosyne Dashboard"
+    "title": "Overview \u2014 Mnemosyne",
+    "page": "overview",
+    "database": "demo",
+    "selected_tab": ""
   },
   {
     "file": "desktop-dark-today.png",
@@ -24,16 +18,22 @@
     "viewport": "1440x1000",
     "scrollWidth": 1440,
     "clientWidth": 1440,
-    "title": "Mnemosyne Dashboard"
+    "title": "Today \u2014 Mnemosyne",
+    "page": "today",
+    "database": "demo",
+    "selected_tab": "Added"
   },
   {
-    "file": "desktop-light-profile.png",
-    "theme": "light",
+    "file": "desktop-dark-profile.png",
+    "theme": "dark",
     "tab": "profile",
     "viewport": "1440x1000",
     "scrollWidth": 1440,
     "clientWidth": 1440,
-    "title": "Mnemosyne Dashboard"
+    "title": "Context bank \u2014 Mnemosyne",
+    "page": "context",
+    "database": "demo",
+    "selected_tab": "Content"
   },
   {
     "file": "desktop-dark-constellation.png",
@@ -42,7 +42,10 @@
     "viewport": "1440x1000",
     "scrollWidth": 1440,
     "clientWidth": 1440,
-    "title": "Mnemosyne Dashboard"
+    "title": "Visualizer \u2014 Mnemosyne",
+    "page": "visualizer",
+    "database": "demo",
+    "selected_tab": "Constellation"
   },
   {
     "file": "desktop-dark-neural.png",
@@ -51,7 +54,10 @@
     "viewport": "1440x1000",
     "scrollWidth": 1440,
     "clientWidth": 1440,
-    "title": "Mnemosyne Dashboard"
+    "title": "Visualizer \u2014 Mnemosyne",
+    "page": "visualizer",
+    "database": "demo",
+    "selected_tab": "Neural map"
   },
   {
     "file": "desktop-dark-search.png",
@@ -60,16 +66,22 @@
     "viewport": "1440x1000",
     "scrollWidth": 1440,
     "clientWidth": 1440,
-    "title": "Mnemosyne Dashboard"
+    "title": "Browse memories \u2014 Mnemosyne",
+    "page": "memories",
+    "database": "demo",
+    "selected_tab": ""
   },
   {
-    "file": "desktop-light-graph.png",
-    "theme": "light",
+    "file": "desktop-dark-graph.png",
+    "theme": "dark",
     "tab": "graph",
     "viewport": "1440x1000",
     "scrollWidth": 1440,
     "clientWidth": 1440,
-    "title": "Mnemosyne Dashboard"
+    "title": "Knowledge graph \u2014 Mnemosyne",
+    "page": "graph",
+    "database": "demo",
+    "selected_tab": "Relationship map"
   },
   {
     "file": "desktop-dark-timeline.png",
@@ -78,7 +90,22 @@
     "viewport": "1440x1000",
     "scrollWidth": 1440,
     "clientWidth": 1440,
-    "title": "Mnemosyne Dashboard"
+    "title": "History \u2014 Mnemosyne",
+    "page": "history",
+    "database": "demo",
+    "selected_tab": ""
+  },
+  {
+    "file": "desktop-dark-settings.png",
+    "theme": "dark",
+    "tab": "settings",
+    "viewport": "1440x1000",
+    "scrollWidth": 1440,
+    "clientWidth": 1440,
+    "title": "Settings \u2014 Mnemosyne",
+    "page": "settings",
+    "database": "demo",
+    "selected_tab": "General"
   },
   {
     "file": "mobile-dark-overview.png",
@@ -87,16 +114,22 @@
     "viewport": "390x844",
     "scrollWidth": 390,
     "clientWidth": 390,
-    "title": "Mnemosyne Dashboard"
+    "title": "Overview \u2014 Mnemosyne",
+    "page": "overview",
+    "database": "demo",
+    "selected_tab": ""
   },
   {
-    "file": "mobile-light-today.png",
-    "theme": "light",
+    "file": "mobile-dark-today.png",
+    "theme": "dark",
     "tab": "today",
     "viewport": "390x844",
     "scrollWidth": 390,
     "clientWidth": 390,
-    "title": "Mnemosyne Dashboard"
+    "title": "Today \u2014 Mnemosyne",
+    "page": "today",
+    "database": "demo",
+    "selected_tab": "Added"
   },
   {
     "file": "mobile-dark-profile.png",
@@ -105,16 +138,22 @@
     "viewport": "390x844",
     "scrollWidth": 390,
     "clientWidth": 390,
-    "title": "Mnemosyne Dashboard"
+    "title": "Context bank \u2014 Mnemosyne",
+    "page": "context",
+    "database": "demo",
+    "selected_tab": "Content"
   },
   {
-    "file": "mobile-light-constellation.png",
-    "theme": "light",
+    "file": "mobile-dark-constellation.png",
+    "theme": "dark",
     "tab": "constellation",
     "viewport": "390x844",
     "scrollWidth": 390,
     "clientWidth": 390,
-    "title": "Mnemosyne Dashboard"
+    "title": "Visualizer \u2014 Mnemosyne",
+    "page": "visualizer",
+    "database": "demo",
+    "selected_tab": "Constellation"
   },
   {
     "file": "mobile-dark-neural.png",
@@ -123,16 +162,22 @@
     "viewport": "390x844",
     "scrollWidth": 390,
     "clientWidth": 390,
-    "title": "Mnemosyne Dashboard"
+    "title": "Visualizer \u2014 Mnemosyne",
+    "page": "visualizer",
+    "database": "demo",
+    "selected_tab": "Neural map"
   },
   {
-    "file": "mobile-light-search.png",
-    "theme": "light",
+    "file": "mobile-dark-search.png",
+    "theme": "dark",
     "tab": "search",
     "viewport": "390x844",
     "scrollWidth": 390,
     "clientWidth": 390,
-    "title": "Mnemosyne Dashboard"
+    "title": "Browse memories \u2014 Mnemosyne",
+    "page": "memories",
+    "database": "demo",
+    "selected_tab": ""
   },
   {
     "file": "mobile-dark-timeline.png",
@@ -141,16 +186,22 @@
     "viewport": "390x844",
     "scrollWidth": 390,
     "clientWidth": 390,
-    "title": "Mnemosyne Dashboard"
+    "title": "History \u2014 Mnemosyne",
+    "page": "history",
+    "database": "demo",
+    "selected_tab": ""
   },
   {
-    "file": "mobile-light-graph.png",
-    "theme": "light",
+    "file": "mobile-dark-graph.png",
+    "theme": "dark",
     "tab": "graph",
     "viewport": "390x844",
     "scrollWidth": 390,
     "clientWidth": 390,
-    "title": "Mnemosyne Dashboard"
+    "title": "Knowledge graph \u2014 Mnemosyne",
+    "page": "graph",
+    "database": "demo",
+    "selected_tab": "Relationship map"
   },
   {
     "file": "mobile-dark-settings.png",
@@ -159,6 +210,9 @@
     "viewport": "390x844",
     "scrollWidth": 390,
     "clientWidth": 390,
-    "title": "Mnemosyne Dashboard"
+    "title": "Settings \u2014 Mnemosyne",
+    "page": "settings",
+    "database": "demo",
+    "selected_tab": "General"
   }
 ]

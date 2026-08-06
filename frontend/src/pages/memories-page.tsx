@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react"
 import { Search } from "lucide-react"
 
 import { MemoryList } from "@/components/memory-list"
+import { MemoryDetailSheet } from "@/components/memory-detail-sheet"
+import { MemoryMaintenanceBar } from "@/components/memory-maintenance-bar"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -48,13 +50,15 @@ function queryFor(filters: Filters, offset = 0): MemoryQuery {
   }
 }
 
-export function MemoriesPage({ stats, databaseKey, searchRequest = "" }: { stats: Stats | null; databaseKey: string; searchRequest?: string }) {
+export function MemoriesPage({ adminEnabled, stats, databaseKey, searchRequest = "" }: { adminEnabled: boolean; stats: Stats | null; databaseKey: string; searchRequest?: string }) {
   const [filters, setFilters] = useState<Filters>(initialFilters)
   const [applied, setApplied] = useState<Filters>(initialFilters)
   const [items, setItems] = useState<Memory[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(false)
+  const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const load = useCallback(async (next: Filters, offset = 0) => {
     setLoading(true)
@@ -74,14 +78,19 @@ export function MemoriesPage({ stats, databaseKey, searchRequest = "" }: { stats
     const requested = { ...initialFilters, q: searchRequest }
     setFilters(requested)
     setApplied(requested)
+    setSelectedIds(new Set())
+    setSelectedMemory(null)
     void load(requested)
   }, [databaseKey, load, searchRequest])
 
   const update = (key: keyof Filters, value: string) => setFilters((current) => ({ ...current, [key]: value }))
   const apply = () => {
     setApplied(filters)
+    setSelectedIds(new Set())
     void load(filters)
   }
+  const toggleSelected = (memory: Memory, checked: boolean) => setSelectedIds((current) => { const next = new Set(current); if (checked) next.add(memory.id); else next.delete(memory.id); return next })
+  const reload = async () => { await load(applied); setSelectedIds(new Set()) }
 
   return (
     <div className="space-y-8">
@@ -112,12 +121,14 @@ export function MemoriesPage({ stats, databaseKey, searchRequest = "" }: { stats
       </form>
 
       {error ? <p className="border-l-2 border-destructive px-4 py-2 text-sm" role="alert">{error}</p> : null}
-      <MemoryList empty={loading ? "Loading memories…" : "No memories match these filters."} items={items} limit={items.length || 1} title="Results" />
+      <MemoryMaintenanceBar adminEnabled={adminEnabled} ids={[...selectedIds]} onChanged={reload} onClear={() => setSelectedIds(new Set())} />
+      <MemoryList empty={loading ? "Loading memories…" : "No memories match these filters."} items={items} limit={items.length || 1} onSelect={setSelectedMemory} onToggleSelected={toggleSelected} selectable={adminEnabled} selectedIds={selectedIds} title="Results" />
       {hasMore ? (
         <Button disabled={loading} onClick={() => void load(applied, items.length)} variant="outline">
           {loading ? "Loading…" : "Load more"}
         </Button>
       ) : null}
+      <MemoryDetailSheet adminEnabled={adminEnabled} memory={selectedMemory} onChanged={reload} onOpenChange={(open) => { if (!open) setSelectedMemory(null) }} />
     </div>
   )
 }

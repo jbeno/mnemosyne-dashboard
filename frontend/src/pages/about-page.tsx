@@ -16,7 +16,7 @@ export function AboutPage() {
         <div className="max-w-xl space-y-6 py-2">
           <div>
             <p className="eyebrow mb-2">Version</p>
-            <p className="text-2xl font-semibold">0.15.0 candidate</p>
+            <p className="text-2xl font-semibold">0.15.0 pre-release</p>
           </div>
           <div className="border-t pt-6">
             <h2 className="text-lg font-semibold">Maintained fork</h2>
@@ -24,11 +24,18 @@ export function AboutPage() {
               This project continues the original mnemosyne-dashboard work with current Hermes compatibility, local-first operation, and a maintained interface.
             </p>
           </div>
-          <Button asChild variant="outline">
-            <a href="https://github.com/wysie/mnemosyne-dashboard" rel="noreferrer" target="_blank">
-              View project history <ExternalLink className="size-4" />
-            </a>
-          </Button>
+          <div className="flex flex-wrap gap-3">
+            <Button asChild>
+              <a href="https://github.com/jbeno/mnemosyne-dashboard" rel="noreferrer" target="_blank">
+                Maintained repository <ExternalLink className="size-4" />
+              </a>
+            </Button>
+            <Button asChild variant="outline">
+              <a href="https://github.com/wysie/mnemosyne-dashboard" rel="noreferrer" target="_blank">
+                Historical upstream <ExternalLink className="size-4" />
+              </a>
+            </Button>
+          </div>
         </div>
       </section>
     </div>

@@ -36,7 +36,7 @@ Do not paste private Mnemosyne memory content into public issues.
 
 ## Frontend dependency safety
 
-The React UI candidate is isolated in `frontend/`, uses exact dependency
+The React UI is isolated in `frontend/`, uses exact dependency
 versions, and commits its Bun lockfile. Repository-local `frontend/bunfig.toml`
 enforces a seven-day release-age gate and disables dependency lifecycle scripts:
 
@@ -66,3 +66,8 @@ bun run audit:iocs -- /path/to/keyv-packages.csv
 The audit fails on an exact malicious package/version match and reports package
 name overlap separately. Review the CSV source and timestamp before relying on
 the result.
+
+The compiled React dashboard is served at `/`. The temporary `/legacy`
+fallback and `/candidate` compatibility alias use the same authenticated API,
+read-only database path controls, and password-gated admin endpoints; neither
+route changes the network or mutation security model.
