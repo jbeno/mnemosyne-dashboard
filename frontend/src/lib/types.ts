@@ -54,6 +54,8 @@ export type CanonicalData = { items: JsonRecord[]; stats: CanonicalStats }
 export type ConstellationData = GraphData & { clusters: Array<{ label: string; count: number }> }
 
 export type DashboardConfig = { host: string; port: number; db_path: string; auth_enabled: boolean; has_password: boolean; bind_url: string; local_url: string; lan_url: string; memory_admin_enabled: boolean; db_paths: string[] }
+export type AuthStatus = { version: string; auth_enabled: boolean; has_password: boolean; authenticated: boolean; config: DashboardConfig }
+export type AuditEntry = { timestamp?: string; action?: string; memory_id?: string; before?: JsonRecord | null; after?: JsonRecord | null; extra?: JsonRecord; raw?: string }
 export type Diagnostics = { db_path: string; exists: boolean; readable: boolean; read_only: boolean; size_bytes: number; modified_at: string; tables: string[]; table_counts: Record<string, number>; missing_expected_tables?: string[]; table_errors?: Record<string, string>; ok: boolean; error?: string }
 export type RuntimeStatus = { ok: boolean; running: boolean; reachable: boolean; pid?: number; pid_file_pid?: number; listener_pids: number[]; stale_pid: boolean; runtime_stale: boolean; runtime_source: string; started_at?: number; probe: { status?: number; url?: string; error?: string }; config: DashboardConfig }
 export type RealtimeStatus = { ok: boolean; read_only: boolean; streaming_supported: boolean; deltasync_supported: boolean; mnemosyne_version: string; realtime_generation: string; event_types: string[]; deltasync_tables: string[]; deltasync_methods: string[]; snapshot_event_count: number; transport: string; payload_policy: string; db_modified_at: string }
@@ -78,6 +80,8 @@ export type Memory = {
   recall_count?: number
   last_recalled?: string
   valid_until?: string
+  superseded_by?: string
+  supersedes?: string
   effective_memory_weight?: number
 }
 

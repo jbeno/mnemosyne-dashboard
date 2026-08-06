@@ -2,8 +2,9 @@
 
 ## 0.15.0
 
-- Add a complete parallel React/shadcn-style UI candidate at `/candidate` with a source-owned component layer, grouped navigation, persistent database/theme controls, and migrated views for the full dashboard.
-- Pin the candidate dependency graph exactly, enforce a seven-day Bun release-age gate with lifecycle scripts disabled, and add an offline lockfile-to-IOC audit command.
+- Promote the complete React/shadcn-style interface to `/`, retain `/legacy` as a temporary soak-period fallback and `/candidate` as a compatibility alias, and preserve historical `?tab=` deep links.
+- Add React password login/logout, audited single and bulk memory maintenance, backup controls, and maintenance history so the default interface reaches legacy feature parity without weakening read-only or LAN-auth safety.
+- Pin the frontend dependency graph exactly, enforce a seven-day Bun release-age gate with lifecycle scripts disabled, pin the Bun CI action and runtime, and add an offline lockfile-to-IOC audit command.
 - Add a global database selector to the desktop rail and compact mobile header so Mnemosyne databases can be switched at runtime without restarting.
 - Discover direct-profile and bank-style Hermes brains automatically, including when `HERMES_HOME` points at an isolated profile; switching stays read-only and limited to the discovered/configured set.
 - Close SQLite connections after every request to prevent the dashboard from exhausting file descriptors during persistent operation.
@@ -14,12 +15,12 @@
 - Keep responsive navigation in one column, replace the misaligned lettermark with a centered geometric mark, and remove redundant shell-level containers.
 - Add a Mnemosyne portrait identity across the application icon, navigation, login, favicon, and a new About screen with live version and database details.
 - Replace the rounded legacy presentation with a documented, source-owned UI system: celestial dark tokens, compact controls, flat navigation, grouped metrics, quieter memory rows, and consistent accessible states.
-- Standardize the candidate on a modern system sans-serif stack with page titles as the primary heading and consistent metadata typography.
+- Standardize the frontend on a modern system sans-serif stack with page titles as the primary heading and consistent metadata typography.
 - Add a persistent collapsible navigation rail with group flyouts and direct group routing, responsive global search, a prominent database selector, and compact right-aligned refresh and theme controls.
 - Replace the Overview number wall with four current-state metrics plus accessible Recharts time-series and horizontal-bar views backed by a new read-only daily activity aggregation endpoint and 7/30/90/365-day presets.
 - Remove redundant page-header and filter dividers, correct line tabs to use an underline without trigger boxes, and extend accessible comparison charts to Lifecycle and Trust Review.
 - Finish Context Bank, Knowledge Graph, MEMORIA, Persona & Facts, Visualizer, and Settings with real read-only APIs, accessible tables, filters, charts, network inspection, diagnostics, and responsive tab overflow.
-- Split data-heavy candidate routes into lazy-loaded bundles and add source-owned shadcn-style Badge and responsive Table primitives without adding runtime dependencies.
+- Split data-heavy frontend routes into lazy-loaded bundles and add source-owned shadcn-style Badge and responsive Table primitives without adding runtime dependencies.
 - Restore category-aware spatial layouts for Constellation and Neural Map, add integrated 2D/3D switching, orbit/pan/zoom controls, fullscreen presentation, reduced-motion handling, and click-through node inspection using the repository's vendored Three.js runtime.
 - Read the current episodic `facts` and MEMORIA knowledge stores alongside temporal `triples`, preserving store provenance so modern Mnemosyne databases no longer render an empty Knowledge Graph.
 - Extend the Knowledge Graph with a readable flat 2D force map and volumetric source-grouped 3D view, ambient-label controls, persistent selected-neighborhood node/predicate labels, highlighted connections, hover summaries, and complete fullscreen inspector overlays across every network map.
@@ -27,6 +28,8 @@
 - Add toggleable graph legends, type/category color modes, category-grouped layouts without decorative region shapes or per-node halos, linked-node navigation, empty-canvas deselection, wider zoom-out ranges, and selection focus that gently de-emphasizes unrelated nodes while retaining ambient labels and the selected neighborhood in 2D, 3D, and fullscreen views.
 - Make ambient labels deterministic and size-aware: the largest and most-connected nodes are guaranteed labels first, with collision-aware placement and a larger secondary-label budget.
 - Give every predefined dashboard category a stable, distinct map color and add a compact reusable, auto-fitted memory-map snapshot beside the Overview activity timeline. The preview uses type coloring and carries a clicked node into the full Visualizer selection.
+- Make dark mode the first-run default, use the Mnemosyne portrait favicon across browser surfaces, and keep 2D/3D fullscreen maps on the active light or dark surface.
+- Update the synthetic-data screenshot generator for React routes and refresh the README showcase around the current dark-mode experience without reading private memory data.
 - Document standalone use without Hermes and the maintained-fork workflow.
 
 ## 0.14.0

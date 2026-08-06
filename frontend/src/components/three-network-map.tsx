@@ -403,7 +403,7 @@ export function ThreeNetworkMap({
   }
 
   return (
-    <div className="relative min-h-[34rem] overflow-hidden rounded-lg border bg-background/35 fullscreen:min-h-screen fullscreen:rounded-none fullscreen:border-0" ref={containerRef}>
+    <div className="relative min-h-[34rem] overflow-hidden rounded-lg border bg-background/35 fullscreen:min-h-screen fullscreen:rounded-none fullscreen:border-0 fullscreen:bg-background" ref={containerRef}>
       <div className="absolute right-3 top-3 z-10 flex gap-1 rounded-md border bg-background/90 p-1 shadow-sm backdrop-blur">
         <Button aria-label={paused ? "Resume rotation" : "Pause rotation"} onClick={() => setPaused((value) => !value)} size="icon" variant="ghost">{paused ? <Play /> : <Pause />}</Button>
         <Button aria-label="Reset 3D view" onClick={() => controlsRef.current?.reset()} size="icon" variant="ghost"><RotateCcw /></Button>

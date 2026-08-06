@@ -1,12 +1,13 @@
 # Mnemosyne UI system
 
-The dashboard has two source-owned presentation layers during migration:
+The dashboard has two source-owned presentation layers during the local cutover
+soak period:
 
-- `static/ui-system.css` keeps the established static application coherent.
-- `frontend/src/components/ui/` and `frontend/src/index.css` form the React UI
-  candidate served at `/candidate`.
+- `frontend/src/components/ui/` and `frontend/src/index.css` form the default
+  React UI served at `/`.
+- `static/ui-system.css` keeps the temporary `/legacy` fallback coherent.
 
-The candidate follows shadcn/ui's open-code principle: this repository owns the
+The React interface follows shadcn/ui's open-code principle: this repository owns the
 visible component source and semantic theme while Radix supplies interaction
 semantics for controls such as tabs, dialogs, and selects. It is a compiled,
 local asset with no third-party browser calls or CDN dependency. The Python
@@ -45,17 +46,16 @@ standard-library server and read-only data API remain unchanged.
 
 ## Token layers
 
-`--ui-*` variables remain canonical for the established static interface. The
-candidate uses matching shadcn-style semantic variables such as `--background`,
+`--ui-*` variables remain canonical for the legacy fallback. The React UI uses
+matching shadcn-style semantic variables such as `--background`,
 `--foreground`, `--card`, `--border`, `--primary`, and `--muted-foreground`.
-Both systems derive from the same night-sky palette until the candidate
-replaces the old shell.
+Both systems derive from the same night-sky palette during the fallback period.
 
 ## Editing rules
 
-1. Keep legacy fixes in `static/style.css` and shared legacy primitives in
-   `static/ui-system.css`.
-2. Put candidate primitives in `frontend/src/components/ui/`, compositions in
+1. Limit legacy changes to safety or fallback correctness in `static/style.css`
+   and `static/ui-system.css`.
+2. Put React primitives in `frontend/src/components/ui/`, compositions in
    `frontend/src/components/`, and page layouts in `frontend/src/pages/`.
 3. Keep tokens and theme decisions centralized in `frontend/src/index.css`.
 4. Add component source deliberately; do not run a latest-version component

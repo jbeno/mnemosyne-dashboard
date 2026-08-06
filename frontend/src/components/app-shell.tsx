@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react"
-import { Database, Menu, Moon, RefreshCw, Search, Sun, X } from "lucide-react"
+import { Database, LogOut, Menu, Moon, RefreshCw, Search, Sun, X } from "lucide-react"
 
 import { AppSidebar, type PageId } from "@/components/app-sidebar"
 import { Button } from "@/components/ui/button"
@@ -23,6 +23,7 @@ export function AppShell({
   switching,
   onSelectDatabase,
   onReload,
+  onLogout,
   children,
 }: {
   page: PageId
@@ -35,6 +36,7 @@ export function AppShell({
   switching: boolean
   onSelectDatabase: (path: string) => void
   onReload: () => void | Promise<void>
+  onLogout?: () => void | Promise<void>
   children: ReactNode
 }) {
   const [collapsed, setCollapsed] = useState(() => window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true")
@@ -47,6 +49,7 @@ export function AppShell({
   }, [collapsed])
 
   const activeRecord = databases.find((database) => database.path === activeDatabase)
+    ?? databases.find((database) => database.active)
   const submitSearch = () => {
     if (searchQuery.trim()) onSearch(searchQuery.trim())
     setSearchOpen(false)
@@ -125,6 +128,7 @@ export function AppShell({
             >
               {theme === "dark" ? <Moon /> : <Sun />}
             </Button>
+            {onLogout ? <Button aria-label="Sign out" onClick={() => void onLogout()} size="icon" title="Sign out" variant="ghost"><LogOut /></Button> : null}
           </div>
         </header>
         <main className="mx-auto w-full max-w-[100rem] px-4 py-8 sm:px-6 lg:px-8 lg:py-10">{children}</main>

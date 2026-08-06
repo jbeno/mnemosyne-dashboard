@@ -8,7 +8,7 @@ const Sheet = DialogPrimitive.Root
 const SheetTrigger = DialogPrimitive.Trigger
 const SheetClose = DialogPrimitive.Close
 
-function SheetContent({ className, children, ...props }: React.ComponentProps<typeof DialogPrimitive.Content>) {
+function SheetContent({ className, children, closeLabel = "Close panel", ...props }: React.ComponentProps<typeof DialogPrimitive.Content> & { closeLabel?: string }) {
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm data-[state=closed]:animate-out data-[state=open]:animate-in" />
@@ -23,7 +23,7 @@ function SheetContent({ className, children, ...props }: React.ComponentProps<ty
         {children}
         <DialogPrimitive.Close className="absolute right-3 top-3 inline-flex size-8 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
           <X className="size-4" />
-          <span className="sr-only">Close navigation</span>
+          <span className="sr-only">{closeLabel}</span>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>

@@ -7,15 +7,16 @@ cloud calls and keeps memory browsing read-only by default. Optional
 password-gated maintenance mode supports safe Mnemosyne-style memory
 supersession/expiry without hard deletes or raw overwrite edits.
 
-The established static HTML/CSS/JS interface remains the default. A parallel
-React UI candidate at `/candidate` moves every dashboard page onto a source-owned component
-layer inspired by shadcn/ui's open-code model, with Radix interaction semantics
-and a celestial token system. Its component rules and contribution guidance are
-documented in [docs/design-system.md](docs/design-system.md).
+The source-owned React interface is the default at `/`, with Radix interaction
+semantics, shadcn/ui-inspired open components, and a celestial token system.
+The previous static interface remains temporarily available at `/legacy` during
+the local soak period; `/candidate` is retained as a compatibility alias. The
+component rules and contribution guidance are documented in
+[docs/design-system.md](docs/design-system.md).
 
-## UI candidate development
+## Frontend development
 
-The candidate currently includes the shared application shell, grouped
+The React dashboard includes the shared application shell, grouped
 navigation with a collapsible desktop rail, a prominent database selector,
 compact search/refresh/theme controls, a responsive mobile drawer, preset-driven
 activity and inventory charts, and
@@ -31,7 +32,7 @@ source-store provenance. Its flat 2D and volumetric 3D maps group connected data
 expose predicates, keep the selected neighborhood labeled and highlighted, and
 retain the complete inspector as an overlay in fullscreen mode.
 
-Build the checked-in candidate assets with Bun:
+Build the checked-in React assets with Bun:
 
 ```bash
 cd frontend
@@ -39,7 +40,7 @@ bun install --frozen-lockfile --ignore-scripts
 bun run build
 ```
 
-Then start the Python server and open `http://127.0.0.1:8765/candidate`. Frontend
+Then start the Python server and open `http://127.0.0.1:8765/`. Frontend
 dependencies are exact-pinned, protected by a seven-day release-age gate, and
 installed with lifecycle scripts disabled. See [SECURITY.md](SECURITY.md) for
 the offline IOC audit workflow.
@@ -113,17 +114,14 @@ Use the `git pull` path when you want to keep a normal local checkout. Use the `
 
 The screenshots below are generated from a synthetic mock Mnemosyne database. They do not contain private memory data.
 
-| Desktop | Mobile |
+| Desktop dark mode | Mobile dark mode |
 | --- | --- |
-| ![Desktop dark overview](docs/screenshots/desktop-dark-overview.png) | ![Mobile dark overview](docs/screenshots/mobile-dark-overview.png) |
-| ![Desktop dark Today in memory](docs/screenshots/desktop-dark-today.png) | ![Mobile light Today in memory](docs/screenshots/mobile-light-today.png) |
-| ![Desktop light Context Bank](docs/screenshots/desktop-light-profile.png) | ![Mobile dark Context Bank](docs/screenshots/mobile-dark-profile.png) |
-| ![Desktop dark Visualiser constellation](docs/screenshots/desktop-dark-constellation.png) | ![Mobile light Visualiser constellation](docs/screenshots/mobile-light-constellation.png) |
-| ![Desktop dark Neural Map visualiser](docs/screenshots/desktop-dark-neural.png) | ![Mobile dark Neural Map visualiser](docs/screenshots/mobile-dark-neural.png) |
-| ![Desktop light overview](docs/screenshots/desktop-light-overview.png) | ![Mobile light search](docs/screenshots/mobile-light-search.png) |
-| ![Desktop dark global search](docs/screenshots/desktop-dark-search.png) | ![Mobile dark timeline](docs/screenshots/mobile-dark-timeline.png) |
-| ![Desktop light graph](docs/screenshots/desktop-light-graph.png) | ![Mobile light graph](docs/screenshots/mobile-light-graph.png) |
-| ![Desktop dark timeline](docs/screenshots/desktop-dark-timeline.png) | ![Mobile dark settings](docs/screenshots/mobile-dark-settings.png) |
+| ![Desktop overview with activity and memory map](docs/screenshots/desktop-dark-overview.png) | ![Mobile overview](docs/screenshots/mobile-dark-overview.png) |
+| ![Desktop memory constellation](docs/screenshots/desktop-dark-constellation.png) | ![Mobile memory constellation](docs/screenshots/mobile-dark-constellation.png) |
+| ![Desktop neural memory map](docs/screenshots/desktop-dark-neural.png) | ![Mobile neural memory map](docs/screenshots/mobile-dark-neural.png) |
+| ![Desktop knowledge graph](docs/screenshots/desktop-dark-graph.png) | ![Mobile knowledge graph](docs/screenshots/mobile-dark-graph.png) |
+| ![Desktop memory browser](docs/screenshots/desktop-dark-search.png) | ![Mobile memory browser](docs/screenshots/mobile-dark-search.png) |
+| ![Desktop settings](docs/screenshots/desktop-dark-settings.png) | ![Mobile settings](docs/screenshots/mobile-dark-settings.png) |
 
 Regenerate the gallery locally with:
 
@@ -131,7 +129,10 @@ Regenerate the gallery locally with:
 python3 scripts/generate_mock_screenshots.py
 ```
 
-The generator creates a temporary mock SQLite database, starts the dashboard on a random localhost port, captures desktop/mobile viewports in dark and light themes, and writes the images to `docs/screenshots/`.
+The generator creates a temporary synthetic SQLite database, starts the
+dashboard on a random localhost port, captures desktop/mobile dark-mode views,
+and writes the images to `docs/screenshots/`. It never opens the configured or
+auto-discovered personal Mnemosyne database.
 
 ## Features
 
