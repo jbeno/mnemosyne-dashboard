@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import sys
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from desktop_api import (  # noqa: E402
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _translate_error(exc: Exception) -> HTTPException:
@@ -26,6 +28,7 @@ def _translate_error(exc: Exception) -> HTTPException:
         return HTTPException(status_code=404, detail=str(exc))
     if isinstance(exc, ValueError):
         return HTTPException(status_code=400, detail=str(exc))
+    logger.exception("Mnemosyne Desktop API read failed", exc_info=exc)
     return HTTPException(status_code=500, detail="Mnemosyne memory data could not be read.")
 
 
