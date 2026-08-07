@@ -1,0 +1,522 @@
+import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react'
+import { useMemo, useState } from 'react'
+import {
+  Badge,
+  Button,
+  EmptyState,
+  ErrorState,
+  PALETTE_AREA,
+  ROUTES_AREA,
+  SIDEBAR_NAV_AREA,
+  SearchField,
+  SegmentedControl,
+  Skeleton,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  Tip,
+  fmtDateTime,
+  host,
+  icons,
+  relativeTime,
+  useQuery,
+  useValue,
+  type HermesPlugin,
+  type PluginContext
+} from '@hermes/plugin-sdk'
+
+import { categoryCounts, connectedIds, layoutGraph, type GraphTopology, type PositionedNode } from './graph'
+import type {
+  ActivityPoint,
+  GraphEdge,
+  GraphNode,
+  MemoriesPayload,
+  MemoryItem,
+  OverviewPayload,
+  TimelineEvent,
+  TimelinePayload
+} from './types'
+
+const { Activity, Brain, Clock, Database, Eye, RefreshCw, Starmap } = {
+  ...icons,
+  Database: icons.Box
+}
+
+const PLUGIN_ID = 'mnemosyne-dashboard'
+const ROUTE = '/memory'
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Mnemosyne memory data could not be loaded.'
+}
+
+function query(path: string, params: Record<string, string | number | undefined>): string {
+  const values = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== '') values.set(key, String(value))
+  }
+  const encoded = values.toString()
+  return encoded ? `${path}?${encoded}` : path
+}
+
+function memoryTime(item: MemoryItem): string {
+  return item.timestamp || item.created_at || ''
+}
+
+function timestampMs(value: string): number {
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : Date.now()
+}
+
+function TypeBadge({ type }: { type: string }) {
+  return <Badge variant="outline">{type || 'memory'}</Badge>
+}
+
+function Stat({ label, value, hint }: { label: string; value: number; hint: string }) {
+  return (
+    <Tip label={hint}>
+      <div className="mnem-stat" tabIndex={0}>
+        <strong>{value.toLocaleString()}</strong>
+        <span>{label}</span>
+      </div>
+    </Tip>
+  )
+}
+
+function ActivityChart({ points }: { points: ActivityPoint[] }) {
+  const values = points.map(point => point.total)
+  const max = Math.max(1, ...values)
+  const width = 760
+  const height = 170
+  const inset = 10
+  const path = points
+    .map((point, index) => {
+      const x = inset + (index / Math.max(1, points.length - 1)) * (width - inset * 2)
+      const y = height - inset - (point.total / max) * (height - inset * 2)
+      return `${index === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`
+    })
+    .join(' ')
+
+  return (
+    <section className="mnem-section">
+      <div className="mnem-section-title">
+        <div>
+          <h2>Memory activity</h2>
+          <p>Records written across memory, knowledge, and consolidation logs.</p>
+        </div>
+        <Activity aria-hidden="true" size={16} />
+      </div>
+      <svg aria-label="Memory activity timeline" className="mnem-activity" role="img" viewBox={`0 0 ${width} ${height}`}>
+        <line className="mnem-gridline" x1="10" x2="750" y1="160" y2="160" />
+        <line className="mnem-gridline" x1="10" x2="750" y1="85" y2="85" />
+        <path className="mnem-area" d={`${path} L750,160 L10,160 Z`} />
+        <path className="mnem-line" d={path} />
+      </svg>
+      <div className="mnem-chart-axis">
+        <span>{points[0]?.date || ''}</span>
+        <span>{points.at(-1)?.date || ''}</span>
+      </div>
+    </section>
+  )
+}
+
+function MapLegend({ nodes }: { nodes: GraphNode[] }) {
+  const categories = categoryCounts(nodes).slice(0, 6)
+  return (
+    <div className="mnem-legend">
+      <div className="mnem-legend-row"><i className="mnem-dot mnem-dot-entity" />Entity or topic</div>
+      <div className="mnem-legend-row"><i className="mnem-dot mnem-dot-memory" />Memory</div>
+      {categories.length > 0 && <span className="mnem-legend-summary">{categories.length} leading categories</span>}
+    </div>
+  )
+}
+
+function NodeInspector({
+  node,
+  nodes,
+  edges,
+  ctx,
+  onSelect,
+  onClose
+}: {
+  node: GraphNode
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+  ctx: PluginContext
+  onSelect: (id: string) => void
+  onClose: () => void
+}) {
+  const relatedEdges = edges.filter(edge => edge.source === node.id || edge.target === node.id)
+  const byId = new Map(nodes.map(item => [item.id, item]))
+  const memory = useQuery<{ item: MemoryItem; read_only: boolean }, Error>({
+    queryKey: [PLUGIN_ID, 'memory', node.memory_id],
+    queryFn: () => ctx.rest(`/memory/${encodeURIComponent(node.memory_id || '')}`),
+    enabled: Boolean(node.memory_id),
+    staleTime: 30_000
+  })
+
+  return (
+    <aside className="mnem-inspector">
+      <div className="mnem-inspector-head">
+        <span>Node inspector</span>
+        <Tip label="Close inspector"><Button aria-label="Close inspector" onClick={onClose} size="icon-xs" variant="ghost"><icons.X /></Button></Tip>
+      </div>
+      <h2>{node.kind === 'memory' ? node.preview || node.label : node.label}</h2>
+      <div className="mnem-badges">
+        <TypeBadge type={node.kind} />
+        {node.category && <Badge variant="outline">{node.category}</Badge>}
+      </div>
+      {memory.data?.item && (
+        <dl className="mnem-meta">
+          <div><dt>Source</dt><dd>{memory.data.item.source || 'Unknown'}</dd></div>
+          <div><dt>Trust</dt><dd>{memory.data.item.veracity || 'Unknown'}</dd></div>
+          <div><dt>Importance</dt><dd>{Number(memory.data.item.importance || 0).toFixed(2)}</dd></div>
+          <div><dt>Last seen</dt><dd>{relativeTime(timestampMs(memoryTime(memory.data.item)))}</dd></div>
+        </dl>
+      )}
+      <div className="mnem-linked">
+        <h3>Linked nodes <span>{relatedEdges.length}</span></h3>
+        {relatedEdges.slice(0, 18).map(edge => {
+          const otherId = edge.source === node.id ? edge.target : edge.source
+          const other = byId.get(otherId)
+          if (!other) return null
+          return (
+            <button key={edge.id} onClick={() => onSelect(other.id)} type="button">
+              <span>{other.kind === 'memory' ? other.preview || other.label : other.label}</span>
+              <small>{edge.label || edge.kind || 'linked'}</small>
+            </button>
+          )
+        })}
+        {relatedEdges.length === 0 && <p>No linked nodes in this snapshot.</p>}
+      </div>
+    </aside>
+  )
+}
+
+function MemoryMap({ constellation, ctx }: { constellation: OverviewPayload['constellation']; ctx: PluginContext }) {
+  const [search, setSearch] = useState('')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [labels, setLabels] = useState<'key' | 'all'>('key')
+  const [topology, setTopology] = useState<GraphTopology>('constellation')
+  const [fullscreen, setFullscreen] = useState(false)
+  const [view, setView] = useState({ x: 0, y: 0, scale: 1 })
+  const [drag, setDrag] = useState<{ x: number; y: number; originX: number; originY: number } | null>(null)
+  const positioned = useMemo(() => layoutGraph(constellation.nodes, constellation.edges, topology), [constellation, topology])
+  const byId = useMemo(() => new Map(positioned.map(node => [node.id, node])), [positioned])
+  const connected = useMemo(() => connectedIds(selectedId, constellation.edges), [selectedId, constellation.edges])
+  const normalizedSearch = search.trim().toLocaleLowerCase()
+  const matches = useMemo(
+    () => new Set(positioned.filter(node => `${node.label} ${node.preview || ''} ${node.category || ''}`.toLocaleLowerCase().includes(normalizedSearch)).map(node => node.id)),
+    [normalizedSearch, positioned]
+  )
+  const selected = selectedId ? byId.get(selectedId) || null : null
+  const major = useMemo(() => new Set([...positioned].sort((a, b) => b.radius - a.radius).slice(0, 18).map(node => node.id)), [positioned])
+
+  const opacity = (id: string) => {
+    if (normalizedSearch) return matches.has(id) ? 1 : 0.12
+    if (selectedId) return connected.has(id) ? 1 : 0.22
+    return 1
+  }
+  const showLabel = (node: PositionedNode) => {
+    if (normalizedSearch) return matches.has(node.id)
+    if (selectedId) return connected.has(node.id)
+    return labels === 'all' || major.has(node.id)
+  }
+  const onWheel = (event: ReactWheelEvent<SVGSVGElement>) => {
+    event.preventDefault()
+    const next = Math.max(0.55, Math.min(3.6, view.scale * (event.deltaY > 0 ? 0.9 : 1.1)))
+    setView(current => ({ ...current, scale: next }))
+  }
+  const onPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (event.target !== event.currentTarget) return
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setSelectedId(null)
+    setDrag({ x: event.clientX, y: event.clientY, originX: view.x, originY: view.y })
+  }
+  const onPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (!drag) return
+    setView(current => ({ ...current, x: drag.originX + event.clientX - drag.x, y: drag.originY + event.clientY - drag.y }))
+  }
+  const onPointerUp = () => setDrag(null)
+
+  return (
+    <section className={`mnem-map-shell${fullscreen ? ' is-fullscreen' : ''}`}>
+      <div className="mnem-map-toolbar">
+        <SegmentedControl onChange={value => { setTopology(value); setView({ x: 0, y: 0, scale: 1 }); setSelectedId(null) }} options={[{ id: 'constellation', label: 'Constellation', icon: Starmap }, { id: 'neural', label: 'Neural map', icon: Brain }]} value={topology} />
+        <SearchField aria-label="Search memory map" containerClassName="mnem-map-search" onChange={setSearch} placeholder="Search nodes…" value={search} />
+        <SegmentedControl onChange={setLabels} options={[{ id: 'key', label: 'Key labels' }, { id: 'all', label: 'All labels' }]} value={labels} />
+        <Tip label="Reset map view"><Button aria-label="Reset map view" onClick={() => setView({ x: 0, y: 0, scale: 1 })} size="icon-sm" variant="ghost"><RefreshCw /></Button></Tip>
+        <Tip label={fullscreen ? 'Exit fullscreen' : 'Open fullscreen'}><Button aria-label={fullscreen ? 'Exit fullscreen' : 'Open fullscreen'} onClick={() => setFullscreen(value => !value)} size="icon-sm" variant="ghost"><icons.Maximize /></Button></Tip>
+      </div>
+      <div className={`mnem-map-layout${selected ? ' has-inspector' : ''}`}>
+        <div className="mnem-map-canvas">
+          <svg
+            aria-label="Interactive Mnemosyne memory map"
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onWheel={onWheel}
+            role="img"
+            viewBox="0 0 1000 620"
+          >
+            <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
+              {constellation.edges.map(edge => {
+                const source = byId.get(edge.source)
+                const target = byId.get(edge.target)
+                if (!source || !target) return null
+                const highlighted = selectedId ? edge.source === selectedId || edge.target === selectedId : false
+                return (
+                  <g key={edge.id} opacity={Math.min(opacity(source.id), opacity(target.id))}>
+                    <line className={highlighted ? 'mnem-edge is-highlighted' : 'mnem-edge'} x1={source.x} x2={target.x} y1={source.y} y2={target.y} />
+                    {(normalizedSearch ? matches.has(source.id) || matches.has(target.id) : highlighted) && edge.label && (
+                      <text className="mnem-edge-label" x={(source.x + target.x) / 2} y={(source.y + target.y) / 2}>{edge.label}</text>
+                    )}
+                  </g>
+                )
+              })}
+              {positioned.map(node => (
+                <g
+                  className="mnem-node"
+                  key={node.id}
+                  onClick={event => { event.stopPropagation(); setSelectedId(node.id) }}
+                  opacity={opacity(node.id)}
+                  role="button"
+                  tabIndex={0}
+                  transform={`translate(${node.x} ${node.y})`}
+                >
+                  <circle className={node.kind === 'memory' ? 'mnem-node-memory' : 'mnem-node-entity'} r={node.radius} />
+                  {showLabel(node) && <text className="mnem-node-label" x={node.radius + 4} y="4">{node.kind === 'memory' ? node.preview || node.label : node.label}</text>}
+                </g>
+              ))}
+            </g>
+          </svg>
+          <MapLegend nodes={constellation.nodes} />
+          <span className="mnem-map-help">Drag to pan · scroll to zoom · select a node to inspect</span>
+        </div>
+        {selected && <NodeInspector ctx={ctx} edges={constellation.edges} node={selected} nodes={constellation.nodes} onClose={() => setSelectedId(null)} onSelect={setSelectedId} />}
+      </div>
+    </section>
+  )
+}
+
+function OverviewView({ data, ctx }: { data: OverviewPayload; ctx: PluginContext }) {
+  const counts = data.stats.counts
+  return (
+    <div className="mnem-stack">
+      <div className="mnem-stats">
+        <Stat hint="Working memories currently retained for active recall." label="Working active" value={counts.working_memory || 0} />
+        <Stat hint="Longer-lived episodic memories created by consolidation." label="Episodic" value={counts.episodic_memory || 0} />
+        <Stat hint="Active non-stated memories above the review importance threshold." label="Review candidates" value={data.stats.review.active_candidates || 0} />
+        <Stat hint="Episodic memories that have moved to a lower lifecycle tier." label="Degraded" value={data.stats.degradation.degraded || 0} />
+      </div>
+      <div className="mnem-overview-grid">
+        <ActivityChart points={data.activity.series} />
+        <section className="mnem-section mnem-snapshot">
+          <div className="mnem-section-title"><div><h2>Current memory map</h2><p>Relationships in the active profile.</p></div><Starmap size={16} /></div>
+          <div className="mnem-mini-map">
+            {layoutGraph(data.constellation.nodes, data.constellation.edges).slice(0, 120).map(node => (
+              <i
+                className={node.kind === 'memory' ? 'is-memory' : ''}
+                key={node.id}
+                style={{ left: `${node.x / 10}%`, top: `${node.y / 6.2}%`, width: Math.max(3, node.radius / 2), height: Math.max(3, node.radius / 2) }}
+              />
+            ))}
+          </div>
+        </section>
+      </div>
+      <MemoryMap constellation={data.constellation} ctx={ctx} />
+    </div>
+  )
+}
+
+function MemoryRow({ item, selected, onClick }: { item: MemoryItem; selected: boolean; onClick: () => void }) {
+  return (
+    <button className={`mnem-memory-row${selected ? ' is-selected' : ''}`} onClick={onClick} type="button">
+      <div><TypeBadge type={item.memory_kind || item.tier || 'memory'} /> <Badge variant="outline">{item.veracity || 'unknown trust'}</Badge></div>
+      <p>{item.content}</p>
+      <small>{item.source || 'Unknown source'} · {relativeTime(timestampMs(memoryTime(item)))} · importance {Number(item.importance || 0).toFixed(2)}</small>
+    </button>
+  )
+}
+
+function MemoryDetail({ item, onClose }: { item: MemoryItem; onClose: () => void }) {
+  return (
+    <aside className="mnem-detail">
+      <div className="mnem-inspector-head"><span>Memory details</span><Button aria-label="Close details" onClick={onClose} size="icon-xs" variant="ghost"><icons.X /></Button></div>
+      <h2>{item.memory_kind === 'episodic' ? 'Episodic memory' : 'Working memory'}</h2>
+      <p className="mnem-detail-content">{item.content}</p>
+      <dl className="mnem-meta">
+        <div><dt>ID</dt><dd>{item.id}</dd></div>
+        <div><dt>Source</dt><dd>{item.source || 'Unknown'}</dd></div>
+        <div><dt>Session</dt><dd>{item.session_id || 'Default'}</dd></div>
+        <div><dt>Scope</dt><dd>{item.scope || 'Unknown'}</dd></div>
+        <div><dt>Trust</dt><dd>{item.veracity || 'Unknown'}</dd></div>
+        <div><dt>Importance</dt><dd>{Number(item.importance || 0).toFixed(2)}</dd></div>
+        <div><dt>Created</dt><dd>{fmtDateTime.format(timestampMs(memoryTime(item)))}</dd></div>
+      </dl>
+      <div className="mnem-readonly-note"><Eye size={14} /> Read-only in this milestone</div>
+    </aside>
+  )
+}
+
+function MemoriesView({ ctx, profile }: { ctx: PluginContext; profile: string }) {
+  const [search, setSearch] = useState('')
+  const [kind, setKind] = useState<'all' | 'working' | 'episodic'>('all')
+  const [selected, setSelected] = useState<MemoryItem | null>(null)
+  const memories = useQuery<MemoriesPayload, Error>({
+    queryKey: [PLUGIN_ID, profile, 'memories', search, kind],
+    queryFn: () => ctx.rest(query('/memories', { q: search, kind, limit: 150 })),
+    staleTime: 10_000
+  })
+
+  return (
+    <div className="mnem-browser">
+      <div className="mnem-browser-toolbar">
+        <SearchField containerClassName="mnem-browser-search" loading={memories.isFetching} onChange={setSearch} placeholder="Search retained memories…" value={search} />
+        <SegmentedControl onChange={setKind} options={[{ id: 'all', label: 'All' }, { id: 'working', label: 'Working' }, { id: 'episodic', label: 'Episodic' }]} value={kind} />
+      </div>
+      {memories.isError ? <ErrorState description={errorMessage(memories.error)} title="Could not load memories" /> : (
+        <div className={`mnem-browser-layout${selected ? ' has-detail' : ''}`}>
+          <div className="mnem-memory-list">
+            {memories.isLoading && Array.from({ length: 8 }).map((_, index) => <Skeleton className="mnem-row-skeleton" key={index} />)}
+            {memories.data?.items.map(item => <MemoryRow item={item} key={item.id} onClick={() => setSelected(item)} selected={selected?.id === item.id} />)}
+            {memories.data?.items.length === 0 && <EmptyState description="Try a different term or memory type." title="No memories found" />}
+          </div>
+          {selected && <MemoryDetail item={selected} onClose={() => setSelected(null)} />}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TimelineRow({ event }: { event: TimelineEvent }) {
+  return (
+    <div className="mnem-timeline-row">
+      <i className={`mnem-timeline-icon is-${event.type}`}>{event.type === 'memory' ? <Brain /> : event.type === 'triple' ? <icons.Link /> : <RefreshCw />}</i>
+      <div><div><strong>{event.title}</strong><span>{relativeTime(timestampMs(event.timestamp))}</span></div><p>{event.preview}</p></div>
+    </div>
+  )
+}
+
+function TimelineView({ ctx, profile }: { ctx: PluginContext; profile: string }) {
+  const [search, setSearch] = useState('')
+  const [group, setGroup] = useState<'day' | 'session'>('day')
+  const timeline = useQuery<TimelinePayload, Error>({
+    queryKey: [PLUGIN_ID, profile, 'timeline', search, group],
+    queryFn: () => ctx.rest(query('/timeline', { q: search, group, limit: 300 })),
+    staleTime: 10_000
+  })
+  return (
+    <div className="mnem-browser">
+      <div className="mnem-browser-toolbar">
+        <SearchField containerClassName="mnem-browser-search" loading={timeline.isFetching} onChange={setSearch} placeholder="Search memory activity…" value={search} />
+        <SegmentedControl onChange={setGroup} options={[{ id: 'day', label: 'By day' }, { id: 'session', label: 'By session' }]} value={group} />
+      </div>
+      {timeline.isError ? <ErrorState description={errorMessage(timeline.error)} title="Could not load the timeline" /> : (
+        <div className="mnem-timeline">
+          {timeline.isLoading && Array.from({ length: 8 }).map((_, index) => <Skeleton className="mnem-row-skeleton" key={index} />)}
+          {timeline.data?.groups.map(section => (
+            <section key={section.key}>
+              <header><h2>{section.key}</h2><Badge variant="outline">{section.count}</Badge></header>
+              {section.events.map((event, index) => <TimelineRow event={event} key={`${event.type}-${event.timestamp}-${index}`} />)}
+            </section>
+          ))}
+          {timeline.data?.groups.length === 0 && <EmptyState description="No retained activity matches this view." title="No timeline activity" />}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Styles() {
+  return <style>{`
+    .mnem-page{height:100%;min-height:0;display:flex;flex-direction:column;background:var(--background);color:var(--foreground)}
+    .mnem-page *{box-sizing:border-box}.mnem-header{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;padding:24px 28px 18px;border-bottom:1px solid var(--border)}
+    .mnem-eyebrow,.mnem-inspector-head>span{display:block;color:var(--ui-accent);font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+    .mnem-header h1{font-size:28px;line-height:1.05;font-weight:690;letter-spacing:-.035em;margin:5px 0 7px}.mnem-header p,.mnem-section p{margin:0;color:var(--muted-foreground);font-size:12px}
+    .mnem-profile{display:flex;align-items:center;gap:8px;color:var(--muted-foreground);font-size:12px}.mnem-profile strong{color:var(--foreground)}
+    .mnem-tabs{padding:0 28px;border-bottom:1px solid var(--border)}.mnem-tabs [role=tablist]{background:transparent;padding:0;height:38px;gap:18px}.mnem-tabs [role=tab]{height:38px;padding:0 1px;border-radius:0;box-shadow:none}.mnem-tabs [data-state=active]{border-bottom:2px solid var(--foreground);background:transparent!important;box-shadow:none!important}
+    .mnem-content{flex:1;min-height:0;overflow:auto;padding:24px 28px 40px}.mnem-stack{display:flex;flex-direction:column;gap:28px}
+    .mnem-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid var(--border);border-bottom:1px solid var(--border)}.mnem-stat{padding:18px 20px;border-right:1px solid var(--border);outline:none}.mnem-stat:last-child{border-right:0}.mnem-stat strong{display:block;font-size:25px;line-height:1}.mnem-stat span{display:block;margin-top:8px;color:var(--muted-foreground);font-size:9px;font-weight:700;letter-spacing:.13em;text-transform:uppercase}
+    .mnem-overview-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px}.mnem-section{min-width:0;border-top:1px solid var(--border);padding-top:16px}.mnem-section-title{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:12px}.mnem-section-title h2{margin:0 0 4px;font-size:14px}.mnem-section-title>svg{color:var(--muted-foreground)}
+    .mnem-activity{display:block;width:100%;height:180px;overflow:visible}.mnem-gridline{stroke:var(--border);stroke-width:1}.mnem-line{fill:none;stroke:var(--ui-accent);stroke-width:2.4}.mnem-area{fill:var(--ui-accent);opacity:.07}.mnem-chart-axis{display:flex;justify-content:space-between;color:var(--muted-foreground);font-size:9px}
+    .mnem-mini-map{position:relative;height:180px;border:1px solid var(--border);overflow:hidden}.mnem-mini-map i{position:absolute;display:block;transform:translate(-50%,-50%);border-radius:50%;background:var(--ui-accent);opacity:.82}.mnem-mini-map i.is-memory{background:var(--foreground);opacity:.5}
+    .mnem-map-shell{border-top:1px solid var(--border);padding-top:16px}.mnem-map-shell.is-fullscreen{position:fixed;inset:0;z-index:999;display:flex;flex-direction:column;padding:12px;background:var(--background)}.mnem-map-shell.is-fullscreen .mnem-map-layout{flex:1;min-height:0}.mnem-map-shell.is-fullscreen .mnem-map-canvas>svg{min-height:0;height:100%}.mnem-map-toolbar{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-bottom:10px}.mnem-map-search{margin-right:auto;min-width:220px}.mnem-map-layout{display:grid;grid-template-columns:minmax(0,1fr);min-height:520px;border:1px solid var(--border);overflow:hidden}.mnem-map-layout.has-inspector{grid-template-columns:minmax(0,1fr) 280px}.mnem-map-canvas{position:relative;min-width:0;background:var(--background)}.mnem-map-canvas>svg{display:block;width:100%;height:100%;min-height:520px;touch-action:none;cursor:grab}.mnem-map-canvas>svg:active{cursor:grabbing}
+    .mnem-edge{stroke:var(--border);stroke-width:1;vector-effect:non-scaling-stroke}.mnem-edge.is-highlighted{stroke:var(--ui-accent);stroke-width:1.8}.mnem-edge-label{fill:var(--ui-accent);font-size:8px;text-anchor:middle;paint-order:stroke;stroke:var(--background);stroke-width:3px}.mnem-node{cursor:pointer;outline:none;transition:opacity .16s}.mnem-node circle{stroke:var(--background);stroke-width:1.5;vector-effect:non-scaling-stroke}.mnem-node-entity{fill:var(--ui-accent)}.mnem-node-memory{fill:var(--foreground);opacity:.72}.mnem-node-label{fill:var(--foreground);font-size:9px;font-weight:600;paint-order:stroke;stroke:var(--background);stroke-width:4px;stroke-linejoin:round;max-width:160px}
+    .mnem-legend{position:absolute;left:12px;bottom:12px;display:flex;align-items:center;gap:12px;padding:6px 8px;border:1px solid var(--border);background:var(--background);font-size:9px;color:var(--muted-foreground)}.mnem-legend-row{display:flex;align-items:center;gap:5px}.mnem-dot{width:7px;height:7px;border-radius:50%}.mnem-dot-entity{background:var(--ui-accent)}.mnem-dot-memory{background:var(--foreground);opacity:.72}.mnem-legend-summary{padding-left:10px;border-left:1px solid var(--border)}.mnem-map-help{position:absolute;right:12px;bottom:14px;font-size:9px;color:var(--muted-foreground)}
+    .mnem-inspector,.mnem-detail{min-width:0;border-left:1px solid var(--border);padding:18px;overflow:auto;background:var(--background)}.mnem-inspector-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.mnem-inspector h2,.mnem-detail h2{font-size:18px;line-height:1.25;margin:12px 0}.mnem-badges{display:flex;gap:6px;flex-wrap:wrap}.mnem-meta{margin:20px 0}.mnem-meta>div{display:grid;grid-template-columns:86px minmax(0,1fr);gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:11px}.mnem-meta dt{color:var(--muted-foreground)}.mnem-meta dd{margin:0;text-align:right;overflow-wrap:anywhere}.mnem-linked h3{display:flex;justify-content:space-between;margin:20px 0 6px;font-size:11px}.mnem-linked button{display:block;width:100%;padding:9px 0;border:0;border-top:1px solid var(--border);background:transparent;color:var(--foreground);text-align:left;cursor:pointer}.mnem-linked button span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}.mnem-linked button small{color:var(--ui-accent);font-size:9px}.mnem-linked p{color:var(--muted-foreground);font-size:11px}
+    .mnem-browser{min-height:100%;display:flex;flex-direction:column}.mnem-browser-toolbar{display:flex;align-items:center;gap:18px;padding-bottom:16px;border-bottom:1px solid var(--border)}.mnem-browser-search{flex:1;max-width:620px}.mnem-browser-layout{display:grid;grid-template-columns:minmax(0,1fr);min-height:0}.mnem-browser-layout.has-detail{grid-template-columns:minmax(0,1fr) 320px}.mnem-memory-list{min-width:0}.mnem-memory-row{display:block;width:100%;padding:15px 8px;border:0;border-bottom:1px solid var(--border);background:transparent;color:var(--foreground);text-align:left;cursor:pointer}.mnem-memory-row:hover,.mnem-memory-row.is-selected{background:var(--accent)}.mnem-memory-row p{margin:8px 0 6px;font-size:12px;line-height:1.5}.mnem-memory-row small{color:var(--muted-foreground);font-size:10px}.mnem-row-skeleton{height:72px;margin:10px 0}.mnem-detail{position:sticky;top:0;height:calc(100vh - 190px)}.mnem-detail-content{font-size:12px;line-height:1.6}.mnem-readonly-note{display:flex;align-items:center;gap:7px;padding:9px;border:1px solid var(--border);color:var(--muted-foreground);font-size:10px}
+    .mnem-timeline{max-width:900px;padding-top:8px}.mnem-timeline section>header{display:flex;align-items:center;gap:8px;padding:16px 0 8px}.mnem-timeline section>header h2{font-size:11px;margin:0;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.11em}.mnem-timeline-row{display:grid;grid-template-columns:30px minmax(0,1fr);gap:12px;padding:11px 0;border-bottom:1px solid var(--border)}.mnem-timeline-icon{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border:1px solid var(--border);border-radius:50%;color:var(--ui-accent)}.mnem-timeline-icon svg{width:13px}.mnem-timeline-row>div>div{display:flex;align-items:center;justify-content:space-between;gap:16px}.mnem-timeline-row strong{font-size:11px}.mnem-timeline-row span,.mnem-timeline-row p{color:var(--muted-foreground);font-size:10px}.mnem-timeline-row p{margin:4px 0 0;line-height:1.5}
+    @media(max-width:900px){.mnem-header{padding:18px}.mnem-content{padding:18px}.mnem-tabs{padding:0 18px}.mnem-overview-grid{grid-template-columns:1fr}.mnem-stats{grid-template-columns:repeat(2,1fr)}.mnem-stat:nth-child(2){border-right:0}.mnem-stat:nth-child(-n+2){border-bottom:1px solid var(--border)}.mnem-map-layout.has-inspector{grid-template-columns:1fr}.mnem-inspector,.mnem-detail{border-left:0;border-top:1px solid var(--border)}.mnem-browser-layout.has-detail{grid-template-columns:1fr}.mnem-detail{position:relative;height:auto}.mnem-map-help{display:none}}
+  `}</style>
+}
+
+function MemoryPage({ ctx }: { ctx: PluginContext }) {
+  const profile = useValue(host.state.profile)
+  const [tab, setTab] = useState<'explore' | 'timeline' | 'memories'>('explore')
+  const overview = useQuery<OverviewPayload, Error>({
+    queryKey: [PLUGIN_ID, profile, 'overview'],
+    queryFn: () => ctx.rest('/overview?days=30&map_limit=240'),
+    refetchInterval: 15_000,
+    staleTime: 8_000
+  })
+
+  return (
+    <div className="mnem-page">
+      <Styles />
+      <header className="mnem-header">
+        <div><span className="mnem-eyebrow">Mnemosyne</span><h1>Memory</h1><p>Explore what Hermes retains, how it connects, and when it changed.</p></div>
+        <div className="mnem-profile"><Database size={15} /><span>Profile</span><strong>{overview.data?.profile || profile || 'coordinator'}</strong>{overview.isFetching && <RefreshCw className="animate-spin" size={13} />}</div>
+      </header>
+      <Tabs className="mnem-tabs" onValueChange={value => setTab(value as typeof tab)} value={tab}>
+        <TabsList>
+          <TabsTrigger value="explore"><Starmap />Explore</TabsTrigger>
+          <TabsTrigger value="timeline"><Clock />Timeline</TabsTrigger>
+          <TabsTrigger value="memories"><Brain />Memories</TabsTrigger>
+        </TabsList>
+      </Tabs>
+      <main className="mnem-content">
+        {tab === 'explore' && overview.isLoading && <div className="mnem-stack"><Skeleton className="h-24" /><Skeleton className="h-72" /><Skeleton className="h-96" /></div>}
+        {tab === 'explore' && overview.isError && <ErrorState description={`${errorMessage(overview.error)} Make sure the Mnemosyne Python plugin is installed and enabled for this profile.`} title="Memory backend unavailable" />}
+        {tab === 'explore' && overview.data && <OverviewView ctx={ctx} data={overview.data} />}
+        {tab === 'timeline' && <TimelineView ctx={ctx} profile={profile} />}
+        {tab === 'memories' && <MemoriesView ctx={ctx} profile={profile} />}
+      </main>
+    </div>
+  )
+}
+
+const plugin: HermesPlugin = {
+  id: PLUGIN_ID,
+  name: 'Mnemosyne Memory',
+  defaultEnabled: false,
+  register(ctx) {
+    ctx.registerMany([
+      {
+        id: 'route',
+        area: ROUTES_AREA,
+        title: 'Memory',
+        data: { path: ROUTE },
+        render: () => <MemoryPage ctx={ctx} />
+      },
+      {
+        id: 'sidebar',
+        area: SIDEBAR_NAV_AREA,
+        order: 45,
+        data: { path: ROUTE, label: 'Memory', codicon: 'database' }
+      },
+      {
+        id: 'open',
+        area: PALETTE_AREA,
+        data: {
+          id: `${PLUGIN_ID}.open`,
+          label: 'Open Mnemosyne memory',
+          icon: Brain,
+          keywords: ['memory', 'mnemosyne', 'graph', 'timeline', 'recall'],
+          run: () => host.navigate(ROUTE)
+        }
+      }
+    ])
+  }
+}
+
+export default plugin

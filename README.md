@@ -94,6 +94,33 @@ hermes plugins install jbeno/mnemosyne-dashboard --enable --force
 
 `--force` deletes the existing plugin directory before reinstalling, so back up any plugin-local changes first.
 
+### Native Hermes Desktop experience
+
+Mnemosyne Dashboard also ships an optional native Desktop plugin. It adds a
+**Memory** destination directly to Hermes Desktop with a profile-aware overview,
+interactive memory map, timeline, retained-memory search, and linked-node
+inspection. The native view uses the active Hermes profile and does not require
+the standalone web server or a browser tab.
+
+After installing and enabling the Python plugin above, install its checked-in
+Desktop bundle:
+
+```bash
+python3 ~/.hermes/plugins/mnemosyne-dashboard/scripts/install_desktop_plugin.py
+```
+
+Then open **Hermes Desktop → Settings → Plugins**, select **Rescan**, and enable
+**Mnemosyne Memory**. It is intentionally disabled on first discovery so merely
+installing the backend never adds a new navigation destination without your
+choice. You can also ask Hermes to run the
+`mnemosyne_dashboard_install_desktop_plugin` tool.
+
+The first native milestone is read-only. It opens SQLite through the same
+`mode=ro` store as the web dashboard and advertises no manage/delete capability.
+Memory maintenance remains in the password-gated web dashboard while the native
+read path soaks. Each Desktop request is routed through the backend for the
+currently active profile, so switching profiles also switches memory stores.
+
 ## Updating
 
 If you installed with the Hermes plugin command, update with:
@@ -219,6 +246,7 @@ The plugin registers:
 - `mnemosyne_dashboard_stop`
 - `mnemosyne_dashboard_status`
 - `mnemosyne_dashboard_config`
+- `mnemosyne_dashboard_install_desktop_plugin`
 
 Example tool arguments:
 
@@ -369,6 +397,8 @@ cd ~/.hermes/plugins/mnemosyne-dashboard
 ~/.hermes/hermes-agent/venv/bin/python -m pytest -q
 ~/.hermes/hermes-agent/venv/bin/python -m compileall -q .
 node --check static/app.js
+scripts/build_desktop_plugin.sh
+git diff --exit-code -- desktop/plugin.js
 ```
 
 Restart the dashboard after backend/server changes:
@@ -392,6 +422,10 @@ __init__.py              # Hermes tool registration + process lifecycle
 config.py                # Config file/env/default resolution
 server.py                # ThreadingHTTPServer + API/static routes
 dashboard_core.py        # Read-only SQLite access
+desktop_api.py           # Profile-aware native Desktop read model
+dashboard/               # Hermes namespaced FastAPI routes
+desktop/src/             # Source for the native Hermes Desktop plugin
+desktop/plugin.js        # Checked-in single-file runtime bundle
 tests/                   # pytest coverage for core/config behavior
 static/                  # HTML/CSS/JS/fonts
 .github/workflows/ci.yml # GitHub Actions smoke tests

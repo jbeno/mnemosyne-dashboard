@@ -19,6 +19,7 @@ if str(_PLUGIN_DIR) not in sys.path:
     sys.path.insert(0, str(_PLUGIN_DIR))
 
 from config import DashboardConfig, config_path, data_dir, effective_config, load_config, public_config, save_config
+from desktop_install import install_desktop_plugin
 
 PLUGIN_NAME = "mnemosyne-dashboard"
 
@@ -261,6 +262,10 @@ def _config(args=None, **kw):
     })
 
 
+def _install_desktop(args=None, **kw):
+    return _json(install_desktop_plugin())
+
+
 def register(ctx):
     cfg = load_config(create=True)
     ctx.register_tool(
@@ -302,4 +307,14 @@ def register(ctx):
         requires_env=[],
         description="Configure Mnemosyne dashboard",
         emoji="⚙️",
+    )
+    ctx.register_tool(
+        name="mnemosyne_dashboard_install_desktop_plugin",
+        toolset="mnemosyne-dashboard",
+        schema={"name":"mnemosyne_dashboard_install_desktop_plugin","description":"Install the opt-in Mnemosyne Memory native Desktop plugin into the shared Hermes desktop-plugins folder.","parameters":{"type":"object","properties":{}}},
+        handler=_install_desktop,
+        check_fn=lambda: True,
+        requires_env=[],
+        description="Install Mnemosyne Memory in Hermes Desktop",
+        emoji="🧠",
     )

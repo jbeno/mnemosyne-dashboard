@@ -14,6 +14,8 @@ python -m ruff check .
 python -m pytest -q
 python -m compileall -q .
 node --check static/app.js
+scripts/build_desktop_plugin.sh
+git diff --exit-code -- desktop/plugin.js
 
 cd frontend
 bun install --frozen-lockfile --ignore-scripts
@@ -44,6 +46,12 @@ Please keep these invariants unless a change explicitly documents and tests a di
 - LAN exposure is the default and should be documented with auth/firewall guidance.
 - The React dashboard is served at `/`; `/legacy` remains a temporary local
   fallback until the React cutover has completed its soak period.
+- The native Hermes Desktop plugin must remain opt-in, profile-aware, and
+  read-only unless a different mutation model is explicitly documented and
+  tested. It must use `ctx.rest` rather than bypassing the active profile.
+- `desktop/plugin.js` is a generated, checked-in single ESM bundle. Runtime
+  imports are limited to `@hermes/plugin-sdk`, `react`, and
+  `react/jsx-runtime`; do not add a separate Desktop dependency graph.
 - Screenshot fixtures use a temporary synthetic SQLite database and must never
   read a contributor's real Mnemosyne database.
 
@@ -53,6 +61,7 @@ Please keep these invariants unless a change explicitly documents and tests a di
 - [ ] Pytest passes.
 - [ ] Python compile check passes.
 - [ ] `node --check static/app.js` passes.
+- [ ] The Desktop plugin rebuild passes and `desktop/plugin.js` matches its source.
 - [ ] Frozen Bun install, React type-check, and React build pass.
 - [ ] `static/candidate/` matches a fresh frontend build.
 - [ ] New or changed frontend dependencies are exact-pinned, older than seven

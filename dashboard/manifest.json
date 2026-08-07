@@ -1,0 +1,11 @@
+{
+  "name": "mnemosyne-dashboard",
+  "label": "Mnemosyne Memory",
+  "description": "Profile-aware read-only memory data for the Mnemosyne Desktop experience.",
+  "icon": "Database",
+  "version": "0.15.0",
+  "tab": {
+    "hidden": true
+  },
+  "api": "plugin_api.py"
+}

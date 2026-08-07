@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Add an opt-in native Hermes Desktop memory experience with an overview,
+  profile-aware activity history, interactive searchable memory map, linked-node
+  inspection, retained-memory browser, and grouped timeline without opening the
+  standalone dashboard.
+- Add a hidden namespaced Hermes backend API for the Desktop plugin. All native
+  reads use the active profile's configured Mnemosyne database through SQLite
+  `mode=ro`; native management and deletion capabilities remain disabled.
+- Ship a dependency-free single-file Desktop bundle, an explicit installer,
+  plugin install tool, build verification, and documentation for discovery and
+  enablement through Hermes Desktop Settings.
+
 ## 0.15.0
 
 - Promote the complete React/shadcn-style interface to `/`, retain `/legacy` as a temporary soak-period fallback and `/candidate` as a compatibility alias, and preserve historical `?tab=` deep links.
