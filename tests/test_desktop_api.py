@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import desktop_api
 from config import save_config
 from desktop_api import memories_payload, memory_payload, overview_payload, timeline_payload
 from test_dashboard_core import make_db
@@ -62,3 +63,8 @@ def test_dashboard_manifest_mounts_hidden_profile_api():
     assert manifest["name"] == "mnemosyne-dashboard"
     assert manifest["api"] == "plugin_api.py"
     assert manifest["tab"]["hidden"] is True
+
+
+def test_desktop_api_uses_isolated_local_modules():
+    assert desktop_api._config.__name__ == "mnemosyne_dashboard_desktop_config"
+    assert desktop_api._dashboard_core.__name__ == "mnemosyne_dashboard_desktop_dashboard_core"

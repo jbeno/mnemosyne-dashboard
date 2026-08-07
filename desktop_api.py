@@ -1,11 +1,39 @@
 from __future__ import annotations
 
+import importlib.util
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
-from config import load_config
-from dashboard_core import DashboardStore, discover_databases
+
+PLUGIN_ROOT = Path(__file__).resolve().parent
+
+
+def _load_local_module(name: str, filename: str):
+    """Load plugin modules without colliding with another plugin's imports."""
+    module_name = f"mnemosyne_dashboard_desktop_{name}"
+    loaded = sys.modules.get(module_name)
+    if loaded is not None:
+        return loaded
+    spec = importlib.util.spec_from_file_location(module_name, PLUGIN_ROOT / filename)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load Mnemosyne Dashboard module: {filename}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception:
+        sys.modules.pop(module_name, None)
+        raise
+    return module
+
+
+_config = _load_local_module("config", "config.py")
+_dashboard_core = _load_local_module("dashboard_core", "dashboard_core.py")
+load_config = _config.load_config
+DashboardStore = _dashboard_core.DashboardStore
+discover_databases = _dashboard_core.discover_databases
 
 
 def _clamp(value: int | str | None, *, default: int, minimum: int, maximum: int) -> int:
