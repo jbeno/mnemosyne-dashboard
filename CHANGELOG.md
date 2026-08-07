@@ -3,11 +3,24 @@
 ## Unreleased
 
 - Add an opt-in native Hermes Desktop memory experience centered on an immersive,
-  rotating 3D explorer with 2D switching, Constellation and Neural Map modes,
-  search, labels, orbit/pan/zoom controls, fullscreen inspection, and linked-node
-  navigation without opening the standalone dashboard.
+  rotating 3D explorer with 2D switching, search, labels, orbit/pan/zoom
+  controls, fullscreen inspection, and linked-node navigation without opening
+  the standalone dashboard.
+- Replace the native plugin's misleading alternate “Neural Map” layout with a
+  true Knowledge Graph view. The Memory Map now contains only retained records
+  and dashboard-derived mention links, while the Knowledge Graph contains only
+  stored subject–predicate–object relations from temporal triples, episodic
+  facts, and MEMORIA, with predicates rendered on edges.
+- Make selected-node inspection an overlay so opening details no longer resizes
+  the graph, align horizontal orbit direction with the standalone visualizer,
+  and use a supported relationship-graph icon in Hermes' contributed sidebar.
 - Move activity metrics and charts to a dedicated native Stats tab while keeping
-  timeline and retained-memory browsing directly accessible.
+  timeline and retained-memory browsing directly accessible. Restore the useful
+  inventory, attention, trust, and lifecycle distributions instead of repeating
+  the explorer's memory-map preview.
+- Clarify that Memories is a ranked retained-record browser while Timeline is a
+  chronological event stream; add explicit importance meters, trust/status
+  badges, and distinct relationship/consolidation event styling.
 - Build the native surface from Hermes Desktop SDK primitives and let Hermes'
   global profile rail remain the authoritative profile selector.
 - Add a hidden namespaced Hermes backend API for the Desktop plugin. All native

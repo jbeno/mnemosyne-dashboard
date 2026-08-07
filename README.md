@@ -98,12 +98,22 @@ hermes plugins install jbeno/mnemosyne-dashboard --enable --force
 
 Mnemosyne Dashboard also ships an optional native Desktop plugin. It adds a
 **Memory** destination directly to Hermes Desktop. The default view is an
-immersive, rotating 3D memory explorer with 2D switching, Constellation and
-Neural Map topologies, search, labels, orbit/pan/zoom controls, fullscreen
-inspection, and linked-node navigation. Timeline, retained-memory search, and a
-separate Stats dashboard stay one tab away. The native view uses Hermes'
-component SDK and active global profile; it does not require the standalone web
-server or a browser tab.
+immersive, rotating 3D explorer with 2D switching, search, labels,
+orbit/pan/zoom controls, fullscreen inspection, and linked-node navigation.
+Its two maps intentionally represent different data:
+
+- **Memory map** shows working and episodic memory records connected to
+  entities/topics derived from text they mention. Those mention links are a
+  dashboard navigation aid; they are not persisted knowledge triples.
+- **Knowledge graph** shows Mnemosyne's structured subject–predicate–object
+  relations across temporal triples, episodic facts, and MEMORIA, with the
+  stored predicate preserved on each edge.
+
+Timeline, retained-memory search, and a separate Stats dashboard stay one tab
+away. The native view uses Hermes' component SDK and active global profile; it
+does not require the standalone web server or a browser tab. The Memories tab
+is a ranked view of retained records (importance by default); Timeline is a
+chronological stream of memory, relationship, and consolidation events.
 
 After installing and enabling the Python plugin above, install its checked-in
 Desktop bundle:

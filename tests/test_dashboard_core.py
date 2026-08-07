@@ -438,6 +438,18 @@ def test_graph_returns_nodes_edges_and_filterable_metadata(tmp_path):
     assert graph['edges'][0]['object'] == 'local-only memory'
 
 
+def test_memory_map_excludes_structured_knowledge_relations(tmp_path):
+    db = tmp_path / 'mnemosyne.db'
+    make_db(db)
+
+    memory_map = DashboardStore(db).memory_map(limit=80)
+
+    assert memory_map['nodes']
+    assert {edge['kind'] for edge in memory_map['edges']} == {'memory'}
+    assert {edge['label'] for edge in memory_map['edges']} == {'mentions'}
+    assert not any(edge['label'] in {'prefers', 'uses', 'is'} for edge in memory_map['edges'])
+
+
 def test_knowledge_graph_reads_current_episodic_and_memoria_stores(tmp_path):
     db = tmp_path / 'mnemosyne.db'
     make_db(db)

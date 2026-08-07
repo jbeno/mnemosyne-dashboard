@@ -39,6 +39,14 @@ def test_overview_is_profile_aware_and_read_only(tmp_path, monkeypatch):
     assert payload["stats"]["counts"]["episodic_memory"] == 2
     assert payload["constellation"]["read_only"] is True
     assert payload["constellation"]["nodes"]
+    assert payload["memory_map"]["read_only"] is True
+    assert payload["memory_map"]["nodes"]
+    assert {edge["kind"] for edge in payload["memory_map"]["edges"]} == {"memory"}
+    assert {edge["label"] for edge in payload["memory_map"]["edges"]} == {"mentions"}
+    assert payload["knowledge_graph"]["read_only"] is True
+    assert payload["knowledge_graph"]["nodes"]
+    assert {edge["kind"] for edge in payload["knowledge_graph"]["edges"]} == {"triple"}
+    assert all(edge["label"] == edge["predicate"] for edge in payload["knowledge_graph"]["edges"])
 
 
 def test_memories_and_detail_are_bounded_read_views(tmp_path, monkeypatch):
@@ -108,6 +116,8 @@ def test_profile_without_memory_database_is_an_empty_ready_view(tmp_path, monkey
     assert overview["database"]["available"] is False
     assert overview["stats"]["counts"]["working_memory"] == 0
     assert overview["constellation"]["nodes"] == []
+    assert overview["memory_map"]["nodes"] == []
+    assert overview["knowledge_graph"]["nodes"] == []
     assert memories_payload()["items"] == []
     assert timeline_payload()["groups"] == []
 

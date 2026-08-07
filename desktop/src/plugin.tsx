@@ -34,7 +34,7 @@ import {
   type PluginContext
 } from '@hermes/plugin-sdk'
 
-import { categoryCounts, connectedIds, layoutGraph, type GraphTopology, type PositionedNode } from './graph'
+import { categoryCounts, connectedIds, layoutGraph, type PositionedNode } from './graph'
 import type {
   ActivityPoint,
   GraphEdge,
@@ -77,7 +77,26 @@ function timestampMs(value: string): number {
 }
 
 function TypeBadge({ type }: { type: string }) {
-  return <Badge variant="outline">{type || 'memory'}</Badge>
+  const normalized = (type || 'memory').toLocaleLowerCase()
+  return <Badge className={`mnem-badge is-${normalized.replace(/[^a-z0-9]+/g, '-')}`} variant="outline">{type || 'memory'}</Badge>
+}
+
+function TrustBadge({ trust }: { trust?: string }) {
+  const normalized = (trust || 'unknown').toLocaleLowerCase()
+  return <Badge className={`mnem-badge is-trust-${normalized.replace(/[^a-z0-9]+/g, '-')}`} variant="outline">{normalized} trust</Badge>
+}
+
+function Strength({ value }: { value?: number }) {
+  const normalized = Math.max(0, Math.min(1, Number(value || 0)))
+  return (
+    <Tip label="Stored importance influences recall ranking alongside semantic and full-text relevance.">
+      <div aria-label={`Importance ${normalized.toFixed(2)}`} className="mnem-strength" tabIndex={0}>
+        <span><i style={{ width: `${normalized * 100}%` }} /></span>
+        <strong>{normalized.toFixed(2)}</strong>
+        <small>Importance</small>
+      </div>
+    </Tip>
+  )
 }
 
 function Stat({ label, value, hint }: { label: string; value: number; hint: string }) {
@@ -136,15 +155,45 @@ function ActivityChart({ points }: { points: ActivityPoint[] }) {
   )
 }
 
+function DistributionChart({
+  description,
+  items,
+  title
+}: {
+  description: string
+  items: Array<{ label: string; value: number }>
+  title: string
+}) {
+  const max = Math.max(1, ...items.map(item => item.value))
+  return (
+    <section className="mnem-section mnem-distribution">
+      <div className="mnem-section-title"><div><h2>{title}</h2><p>{description}</p></div></div>
+      <div className="mnem-bars">
+        {items.map(item => (
+          <Tip key={item.label} label={`${item.label}: ${item.value.toLocaleString()}`}>
+            <div className="mnem-bar" tabIndex={0}>
+              <span>{item.label}</span>
+              <i><b style={{ width: `${(item.value / max) * 100}%` }} /></i>
+              <strong>{item.value.toLocaleString()}</strong>
+            </div>
+          </Tip>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 const MAP_COLORS = ['#3b82f6', '#f97316', '#14b8a6', '#a855f7', '#eab308', '#ec4899', '#22c55e', '#6366f1', '#ef4444', '#06b6d4', '#84cc16', '#f59e0b']
 
 function MapLegend({
   categoryColors,
+  mapKind,
   mode,
   nodes,
   onModeChange
 }: {
   categoryColors: Map<string, string>
+  mapKind: 'memory' | 'knowledge'
   mode: 'type' | 'category'
   nodes: GraphNode[]
   onModeChange: (mode: 'type' | 'category') => void
@@ -152,12 +201,13 @@ function MapLegend({
   const categories = categoryCounts(nodes).slice(0, 6)
   return (
     <div className="mnem-legend">
-      <SegmentedControl onChange={onModeChange} options={[{ id: 'type', label: 'Type' }, { id: 'category', label: 'Category' }]} value={mode} />
+      <SegmentedControl onChange={onModeChange} options={[{ id: 'type', label: 'Type' }, { id: 'category', label: mapKind === 'knowledge' ? 'Store' : 'Category' }]} value={mode} />
       <div className="mnem-legend-items">
         {mode === 'type' ? (
           <>
-            <div className="mnem-legend-row"><i className="mnem-dot mnem-dot-entity" />Entity or topic</div>
-            <div className="mnem-legend-row"><i className="mnem-dot mnem-dot-memory" />Memory</div>
+            <div className="mnem-legend-row"><i className="mnem-dot mnem-dot-entity" />{mapKind === 'knowledge' ? 'Entity' : 'Entity or topic'}</div>
+            {mapKind === 'memory' && <div className="mnem-legend-row"><i className="mnem-dot mnem-dot-memory" />Memory record</div>}
+            <div className="mnem-legend-row"><i className="mnem-line-key" />{mapKind === 'knowledge' ? 'Predicate relation' : 'Mention derived from text'}</div>
           </>
         ) : categories.map(category => (
           <div className="mnem-legend-row" key={category.label}>
@@ -357,19 +407,21 @@ function projectNode(node: PositionedNode, rotation: { x: number; y: number }, d
 
 function MemoryMap({
   capabilities,
-  constellation,
+  knowledgeGraph,
+  memoryMap,
   ctx,
   immersive = false
 }: {
   capabilities: OverviewPayload['capabilities']
-  constellation: OverviewPayload['constellation']
+  knowledgeGraph: OverviewPayload['knowledge_graph']
+  memoryMap: OverviewPayload['memory_map']
   ctx: PluginContext
   immersive?: boolean
 }) {
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [labels, setLabels] = useState<'key' | 'all'>('key')
-  const [topology, setTopology] = useState<GraphTopology>('constellation')
+  const [mapKind, setMapKind] = useState<'memory' | 'knowledge'>('memory')
   const [colorMode, setColorMode] = useState<'type' | 'category'>('type')
   const [dimension, setDimension] = useState<'2d' | '3d'>('3d')
   const [paused, setPaused] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
@@ -384,13 +436,14 @@ function MemoryMap({
     rotationX: number
     rotationY: number
   } | null>(null)
-  const positioned = useMemo(() => layoutGraph(constellation.nodes, constellation.edges, topology), [constellation, topology])
+  const graph = mapKind === 'knowledge' ? knowledgeGraph : memoryMap
+  const positioned = useMemo(() => layoutGraph(graph.nodes, graph.edges), [graph])
   const projected = useMemo(
     () => positioned.map(node => projectNode(node, rotation, dimension)),
     [dimension, positioned, rotation]
   )
   const byId = useMemo(() => new Map(projected.map(node => [node.id, node])), [projected])
-  const connected = useMemo(() => connectedIds(selectedId, constellation.edges), [selectedId, constellation.edges])
+  const connected = useMemo(() => connectedIds(selectedId, graph.edges), [selectedId, graph.edges])
   const normalizedSearch = search.trim().toLocaleLowerCase()
   const matches = useMemo(
     () => new Set(projected.filter(node => `${node.label} ${node.preview || ''} ${node.category || ''}`.toLocaleLowerCase().includes(normalizedSearch)).map(node => node.id)),
@@ -399,9 +452,9 @@ function MemoryMap({
   const selected = selectedId ? byId.get(selectedId) || null : null
   const major = useMemo(() => new Set([...projected].sort((a, b) => b.radius - a.radius).slice(0, 20).map(node => node.id)), [projected])
   const categoryColors = useMemo(() => {
-    const categories = [...new Set(constellation.nodes.map(node => node.category || 'Other'))].sort()
+    const categories = [...new Set(graph.nodes.map(node => node.category || 'Other'))].sort()
     return new Map(categories.map((category, index) => [category, MAP_COLORS[index % MAP_COLORS.length]]))
-  }, [constellation.nodes])
+  }, [graph.nodes])
 
   useEffect(() => {
     if (dimension !== '3d' || paused || drag) return
@@ -450,7 +503,7 @@ function MemoryMap({
     if (dimension === '3d' && !event.shiftKey) {
       setRotation({
         x: Math.max(-1.25, Math.min(1.25, drag.rotationX + (event.clientY - drag.y) * 0.006)),
-        y: drag.rotationY + (event.clientX - drag.x) * 0.006
+        y: drag.rotationY - (event.clientX - drag.x) * 0.006
       })
     } else {
       setView(current => ({ ...current, x: drag.originX + event.clientX - drag.x, y: drag.originY + event.clientY - drag.y }))
@@ -465,21 +518,28 @@ function MemoryMap({
 
   return (
     <section className={`mnem-map-shell${fullscreen ? ' is-fullscreen' : ''}${immersive ? ' is-immersive' : ''}`}>
-      <div className={`mnem-map-layout${selected ? ' has-inspector' : ''}`}>
+      <div className="mnem-map-layout">
         <div className="mnem-map-canvas">
           <div className="mnem-map-modes">
             <SegmentedControl onChange={value => { setDimension(value); reset() }} options={[{ id: '2d', label: '2D', icon: Starmap }, { id: '3d', label: '3D', icon: icons.Box }]} value={dimension} />
-            <SegmentedControl onChange={value => { setTopology(value); reset() }} options={[{ id: 'constellation', label: 'Constellation', icon: Starmap }, { id: 'neural', label: 'Neural map', icon: Brain }]} value={topology} />
+            <SegmentedControl
+              onChange={value => { setMapKind(value); reset() }}
+              options={[
+                { id: 'memory', label: 'Memory map', icon: Brain },
+                { id: 'knowledge', label: 'Knowledge graph', icon: icons.Link }
+              ]}
+              value={mapKind}
+            />
           </div>
           <div className="mnem-map-actions">
-            <SearchField aria-label="Search memory map" containerClassName="mnem-map-search" onChange={setSearch} placeholder="Search nodes…" value={search} />
+            <SearchField aria-label={mapKind === 'knowledge' ? 'Search knowledge graph' : 'Search memory map'} containerClassName="mnem-map-search" onChange={setSearch} placeholder="Search nodes…" value={search} />
             {dimension === '3d' && <Tip label={paused ? 'Resume rotation' : 'Pause rotation'}><Button aria-label={paused ? 'Resume rotation' : 'Pause rotation'} onClick={() => setPaused(value => !value)} size="icon-sm" variant="ghost">{paused ? <icons.Play /> : <icons.Pause />}</Button></Tip>}
             <Tip label={labels === 'all' ? 'Show key labels' : 'Show all labels'}><Button aria-label="Toggle node labels" onClick={() => setLabels(value => value === 'all' ? 'key' : 'all')} size="icon-sm" variant={labels === 'all' ? 'secondary' : 'ghost'}><Eye /></Button></Tip>
             <Tip label="Reset map view"><Button aria-label="Reset map view" onClick={reset} size="icon-sm" variant="ghost"><RefreshCw /></Button></Tip>
             <Tip label={fullscreen ? 'Exit fullscreen' : 'Open fullscreen'}><Button aria-label={fullscreen ? 'Exit fullscreen' : 'Open fullscreen'} onClick={() => setFullscreen(value => !value)} size="icon-sm" variant="ghost"><icons.Maximize /></Button></Tip>
           </div>
           <svg
-            aria-label="Interactive Mnemosyne memory map"
+            aria-label={mapKind === 'knowledge' ? 'Interactive Mnemosyne knowledge graph' : 'Interactive Mnemosyne memory map'}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
@@ -488,7 +548,7 @@ function MemoryMap({
             viewBox="0 0 1000 620"
           >
             <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
-              {constellation.edges.map(edge => {
+              {graph.edges.map(edge => {
                 const source = byId.get(edge.source)
                 const target = byId.get(edge.target)
                 if (!source || !target) return null
@@ -496,7 +556,11 @@ function MemoryMap({
                 return (
                   <g key={edge.id} opacity={Math.min(opacity(source.id), opacity(target.id))}>
                     <line className={highlighted ? 'mnem-edge is-highlighted' : 'mnem-edge'} x1={source.screenX} x2={target.screenX} y1={source.screenY} y2={target.screenY} />
-                    {(normalizedSearch ? matches.has(source.id) || matches.has(target.id) : highlighted) && edge.label && (
+                    {(
+                      normalizedSearch
+                        ? matches.has(source.id) || matches.has(target.id)
+                        : highlighted || (mapKind === 'knowledge' && labels === 'all')
+                    ) && edge.label && (
                       <text className="mnem-edge-label" x={(source.screenX + target.screenX) / 2} y={(source.screenY + target.screenY) / 2}>{edge.label}</text>
                     )}
                   </g>
@@ -523,10 +587,10 @@ function MemoryMap({
               ))}
             </g>
           </svg>
-          <MapLegend categoryColors={categoryColors} mode={colorMode} nodes={constellation.nodes} onModeChange={setColorMode} />
+          <MapLegend categoryColors={categoryColors} mapKind={mapKind} mode={colorMode} nodes={graph.nodes} onModeChange={setColorMode} />
           <span className="mnem-map-help">{dimension === '3d' ? 'Drag to orbit · Shift-drag to pan' : 'Drag to pan'} · scroll to zoom · select a node to inspect</span>
         </div>
-        {selected && <NodeInspector capabilities={capabilities} ctx={ctx} edges={constellation.edges} node={selected} nodes={constellation.nodes} onClose={() => setSelectedId(null)} onSelect={setSelectedId} />}
+        {selected && <NodeInspector capabilities={capabilities} ctx={ctx} edges={graph.edges} node={selected} nodes={graph.nodes} onClose={() => setSelectedId(null)} onSelect={setSelectedId} />}
       </div>
     </section>
   )
@@ -536,11 +600,13 @@ function ExplorerView({ data, ctx }: { data: OverviewPayload; ctx: PluginContext
   if (!data.database.available) {
     return <EmptyState description={`No Mnemosyne database was found for the ${data.profile} profile. Create memory in that profile, then refresh this view.`} title="This profile has no memory database yet" />
   }
-  return <MemoryMap capabilities={data.capabilities} constellation={data.constellation} ctx={ctx} immersive />
+  return <MemoryMap capabilities={data.capabilities} ctx={ctx} immersive knowledgeGraph={data.knowledge_graph} memoryMap={data.memory_map} />
 }
 
 function StatsView({ data }: { data: OverviewPayload }) {
   const counts = data.stats.counts
+  const trust = data.stats.by_veracity.map(item => ({ label: item.veracity.replace(/^./, value => value.toUpperCase()), value: item.count }))
+  const lifecycle = data.stats.by_degradation.map(item => ({ label: item.degradation_label.replace(/^./, value => value.toUpperCase()), value: item.count }))
   return (
     <div className="mnem-stack">
       <div className="mnem-stats">
@@ -549,20 +615,30 @@ function StatsView({ data }: { data: OverviewPayload }) {
         <Stat hint="Active non-stated memories above the review importance threshold." label="Review candidates" value={data.stats.review.active_candidates || 0} />
         <Stat hint="Episodic memories that have moved to a lower lifecycle tier." label="Degraded" value={data.stats.degradation.degraded || 0} />
       </div>
-      <div className="mnem-overview-grid">
-        <ActivityChart points={data.activity.series} />
-        <section className="mnem-section mnem-snapshot">
-          <div className="mnem-section-title"><div><h2>Current memory map</h2><p>Relationships in the active profile.</p></div><Starmap size={16} /></div>
-          <div className="mnem-mini-map">
-            {layoutGraph(data.constellation.nodes, data.constellation.edges).slice(0, 120).map(node => (
-              <i
-                className={node.kind === 'memory' ? 'is-memory' : ''}
-                key={node.id}
-                style={{ left: `${node.x / 10}%`, top: `${node.y / 6.2}%`, width: Math.max(3, node.radius / 2), height: Math.max(3, node.radius / 2) }}
-              />
-            ))}
-          </div>
-        </section>
+      <ActivityChart points={data.activity.series} />
+      <div className="mnem-chart-grid">
+        <DistributionChart
+          description="Current retained records by Mnemosyne storage function."
+          items={[
+            { label: 'Working', value: counts.working_memory || 0 },
+            { label: 'Episodic', value: counts.episodic_memory || 0 },
+            { label: 'Knowledge relations', value: counts.triples || 0 },
+            { label: 'Consolidations', value: counts.consolidation_log || 0 }
+          ]}
+          title="System inventory"
+        />
+        <DistributionChart
+          description="Records surfaced for optional trust or lifecycle attention."
+          items={[
+            { label: 'Review', value: data.stats.review.active_candidates || 0 },
+            { label: 'Degraded', value: data.stats.degradation.degraded || 0 },
+            { label: 'Due warm', value: data.stats.degradation.due_tier2 || 0 },
+            { label: 'Due cold', value: data.stats.degradation.due_tier3 || 0 }
+          ]}
+          title="Attention queues"
+        />
+        <DistributionChart description="How retained memories describe confidence in their origin." items={trust.length ? trust : [{ label: 'Unknown', value: 0 }]} title="Trust provenance" />
+        <DistributionChart description="Episodic memories across hot, warm, and cold lifecycle tiers." items={lifecycle.length ? lifecycle : [{ label: 'Hot', value: 0 }, { label: 'Warm', value: 0 }, { label: 'Cold', value: 0 }]} title="Lifecycle tiers" />
       </div>
     </div>
   )
@@ -571,9 +647,12 @@ function StatsView({ data }: { data: OverviewPayload }) {
 function MemoryRow({ item, selected, onClick }: { item: MemoryItem; selected: boolean; onClick: () => void }) {
   return (
     <button className={`mnem-memory-row${selected ? ' is-selected' : ''}`} onClick={onClick} type="button">
-      <div><TypeBadge type={item.memory_kind || item.tier || 'memory'} /> <Badge variant="outline">{item.veracity || 'unknown trust'}</Badge></div>
-      <p>{item.content}</p>
-      <small>{item.source || 'Unknown source'} · {relativeTime(timestampMs(memoryTime(item)))} · importance {Number(item.importance || 0).toFixed(2)}</small>
+      <div className="mnem-memory-copy">
+        <div className="mnem-badges"><TypeBadge type={item.memory_kind || item.tier || 'memory'} /><TrustBadge trust={item.veracity} /></div>
+        <p>{item.content}</p>
+        <small>{item.source || 'Unknown source'} · {relativeTime(timestampMs(memoryTime(item)))} · recalled {(item.recall_count || 0).toLocaleString()} times</small>
+      </div>
+      <Strength value={item.importance} />
     </button>
   )
 }
@@ -614,10 +693,11 @@ function MemoriesView({ capabilities, ctx, profile }: { capabilities: OverviewPa
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [kind, setKind] = useState<'all' | 'working' | 'episodic'>('all')
+  const [sort, setSort] = useState<'importance' | 'recent' | 'recall'>('importance')
   const [selected, setSelected] = useState<MemoryItem | null>(null)
   const memories = useQuery<MemoriesPayload, Error>({
-    queryKey: [PLUGIN_ID, profile, 'memories', search, kind],
-    queryFn: () => ctx.rest(query('/memories', { q: search, kind, limit: 150 })),
+    queryKey: [PLUGIN_ID, profile, 'memories', search, kind, sort],
+    queryFn: () => ctx.rest(query('/memories', { q: search, kind, sort, limit: 150 })),
     staleTime: 10_000
   })
 
@@ -626,7 +706,9 @@ function MemoriesView({ capabilities, ctx, profile }: { capabilities: OverviewPa
       <div className="mnem-browser-toolbar">
         <SearchField containerClassName="mnem-browser-search" loading={memories.isFetching} onChange={setSearch} placeholder="Search retained memories…" value={search} />
         <SegmentedControl onChange={setKind} options={[{ id: 'all', label: 'All' }, { id: 'working', label: 'Working' }, { id: 'episodic', label: 'Episodic' }]} value={kind} />
+        <SegmentedControl onChange={setSort} options={[{ id: 'importance', label: 'Importance' }, { id: 'recent', label: 'Recent' }, { id: 'recall', label: 'Most recalled' }]} value={sort} />
       </div>
+      <p className="mnem-browser-context">Memories are retained records; this view ranks them by {sort === 'importance' ? 'stored importance' : sort === 'recall' ? 'recall count' : 'creation time'}. Timeline preserves the chronology of memory, relationship, and consolidation events.</p>
       {memories.isError ? <ErrorState description={errorMessage(memories.error)} title="Could not load memories" /> : (
         <div className={`mnem-browser-layout${selected ? ' has-detail' : ''}`}>
           <div className="mnem-memory-list">
@@ -645,7 +727,10 @@ function TimelineRow({ event }: { event: TimelineEvent }) {
   return (
     <div className="mnem-timeline-row">
       <i className={`mnem-timeline-icon is-${event.type}`}>{event.type === 'memory' ? <Brain /> : event.type === 'triple' ? <icons.Link /> : <RefreshCw />}</i>
-      <div><div><strong>{event.title}</strong><span>{relativeTime(timestampMs(event.timestamp))}</span></div><p>{event.preview}</p></div>
+      <div>
+        <div><span className="mnem-timeline-title"><strong>{event.title}</strong><TypeBadge type={event.type === 'memory' ? event.item.memory_kind || 'memory' : event.type === 'triple' ? 'relationship' : 'consolidation'} /></span><span>{relativeTime(timestampMs(event.timestamp))}</span></div>
+        <p>{event.preview}</p>
+      </div>
     </div>
   )
 }
@@ -690,16 +775,16 @@ function Styles() {
     .mnem-tabs{padding:0 28px;border-bottom:1px solid var(--border)}.mnem-tabs [role=tablist]{background:transparent;padding:0;height:38px;gap:18px}.mnem-tabs [role=tab]{height:38px;padding:0 1px;border-radius:0;box-shadow:none}.mnem-tabs [data-state=active]{border-bottom:2px solid var(--foreground);background:transparent!important;box-shadow:none!important}
     .mnem-content{flex:1;min-height:0;overflow:auto;padding:24px 28px 40px}.mnem-content.is-explore{display:flex;overflow:hidden;padding:16px 28px 22px}.mnem-content.is-explore>*{flex:1;min-height:0}.mnem-stack{display:flex;flex-direction:column;gap:28px}
     .mnem-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid var(--border);border-bottom:1px solid var(--border)}.mnem-stat{padding:18px 20px;border-right:1px solid var(--border);outline:none}.mnem-stat:last-child{border-right:0}.mnem-stat strong{display:block;font-size:25px;line-height:1}.mnem-stat span{display:block;margin-top:8px;color:var(--muted-foreground);font-size:9px;font-weight:700;letter-spacing:.13em;text-transform:uppercase}
-    .mnem-overview-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px}.mnem-section{min-width:0;border-top:1px solid var(--border);padding-top:16px}.mnem-section-title{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:12px}.mnem-section-title h2{margin:0 0 4px;font-size:14px}.mnem-section-title>svg{color:var(--muted-foreground)}
+    .mnem-overview-grid,.mnem-chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px}.mnem-section{min-width:0;border-top:1px solid var(--border);padding-top:16px}.mnem-section-title{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:12px}.mnem-section-title h2{margin:0 0 4px;font-size:14px}.mnem-section-title>svg{color:var(--muted-foreground)}
     .mnem-activity{display:block;width:100%;height:180px;overflow:visible}.mnem-gridline{stroke:var(--border);stroke-width:1}.mnem-line{fill:none;stroke:var(--ui-accent);stroke-width:2.4}.mnem-area{fill:var(--ui-accent);opacity:.07}.mnem-chart-axis{display:flex;justify-content:space-between;color:var(--muted-foreground);font-size:9px}
-    .mnem-mini-map{position:relative;height:180px;border:1px solid var(--border);overflow:hidden}.mnem-mini-map i{position:absolute;display:block;transform:translate(-50%,-50%);border-radius:50%;background:var(--ui-accent);opacity:.82}.mnem-mini-map i.is-memory{background:var(--foreground);opacity:.5}
-    .mnem-map-shell{border-top:1px solid var(--border);padding-top:16px}.mnem-map-shell.is-immersive{display:flex;min-height:0;border-top:0;padding-top:0}.mnem-map-shell.is-immersive .mnem-map-layout{flex:1;min-height:0}.mnem-map-shell.is-fullscreen{position:fixed;inset:0;z-index:999;display:flex;flex-direction:column;padding:12px;background:var(--background)}.mnem-map-shell.is-fullscreen .mnem-map-layout{flex:1;min-height:0}.mnem-map-shell.is-fullscreen .mnem-map-canvas>svg{min-height:0;height:100%}.mnem-map-layout{display:grid;grid-template-columns:minmax(0,1fr);min-height:520px;border:1px solid var(--border);overflow:hidden}.mnem-map-layout.has-inspector{grid-template-columns:minmax(0,1fr) 300px}.mnem-map-canvas{position:relative;min-width:0;min-height:0;background:var(--background)}.mnem-map-canvas>svg{display:block;width:100%;height:100%;min-height:520px;touch-action:none;cursor:grab}.mnem-map-shell.is-immersive .mnem-map-canvas>svg{min-height:0}.mnem-map-canvas>svg:active{cursor:grabbing}.mnem-map-modes,.mnem-map-actions{position:absolute;top:12px;z-index:4;display:flex;align-items:center;gap:8px;padding:4px;border:1px solid var(--border);background:color-mix(in srgb,var(--background) 92%,transparent);box-shadow:0 8px 24px rgba(0,0,0,.08);backdrop-filter:blur(12px)}.mnem-map-modes{left:12px;flex-direction:column;align-items:flex-start}.mnem-map-actions{right:12px}.mnem-map-search{width:190px}
+    .mnem-bars{display:flex;flex-direction:column;gap:11px}.mnem-bar{display:grid;grid-template-columns:92px minmax(0,1fr) auto;align-items:center;gap:10px;outline:none}.mnem-bar>span,.mnem-bar>strong{font-size:10px}.mnem-bar>span{color:var(--muted-foreground)}.mnem-bar>strong{min-width:30px;text-align:right}.mnem-bar>i{display:block;height:6px;overflow:hidden;background:var(--accent)}.mnem-bar>i>b{display:block;height:100%;min-width:2px;background:var(--ui-accent)}
+    .mnem-map-shell{border-top:1px solid var(--border);padding-top:16px}.mnem-map-shell.is-immersive{display:flex;min-height:0;border-top:0;padding-top:0}.mnem-map-shell.is-immersive .mnem-map-layout{flex:1;min-height:0}.mnem-map-shell.is-fullscreen{position:fixed;inset:0;z-index:999;display:flex;flex-direction:column;padding:12px;background:var(--background)}.mnem-map-shell.is-fullscreen .mnem-map-layout{flex:1;min-height:0}.mnem-map-shell.is-fullscreen .mnem-map-canvas>svg{min-height:0;height:100%}.mnem-map-layout{position:relative;display:grid;grid-template-columns:minmax(0,1fr);min-height:520px;border:1px solid var(--border);overflow:hidden}.mnem-map-canvas{position:relative;min-width:0;min-height:0;background:var(--background)}.mnem-map-canvas>svg{display:block;width:100%;height:100%;min-height:520px;touch-action:none;cursor:grab}.mnem-map-shell.is-immersive .mnem-map-canvas>svg{min-height:0}.mnem-map-canvas>svg:active{cursor:grabbing}.mnem-map-modes,.mnem-map-actions{position:absolute;top:12px;z-index:4;display:flex;align-items:center;gap:8px;padding:4px;border:1px solid var(--border);background:color-mix(in srgb,var(--background) 92%,transparent);box-shadow:0 8px 24px rgba(0,0,0,.08);backdrop-filter:blur(12px)}.mnem-map-modes{left:12px;flex-direction:column;align-items:flex-start}.mnem-map-actions{right:12px}.mnem-map-search{width:190px}
     .mnem-edge{stroke:var(--border);stroke-width:1;vector-effect:non-scaling-stroke}.mnem-edge.is-highlighted{stroke:var(--ui-accent);stroke-width:1.8}.mnem-edge-label{fill:var(--ui-accent);font-size:8px;text-anchor:middle;paint-order:stroke;stroke:var(--background);stroke-width:3px}.mnem-node{cursor:pointer;outline:none;transition:opacity .16s}.mnem-node circle{stroke:var(--background);stroke-width:1.5;vector-effect:non-scaling-stroke}.mnem-node.is-connected circle{stroke:var(--ui-accent);stroke-width:2}.mnem-node.is-selected circle{stroke:var(--ui-accent);stroke-width:3}.mnem-node-entity{fill:var(--ui-accent)}.mnem-node-memory{fill:var(--foreground);opacity:.72}.mnem-node-label{fill:var(--foreground);font-size:9px;font-weight:600;paint-order:stroke;stroke:var(--background);stroke-width:4px;stroke-linejoin:round;max-width:160px}
-    .mnem-legend{position:absolute;left:12px;bottom:12px;display:flex;align-items:center;gap:8px;padding:5px 7px;border:1px solid var(--border);background:color-mix(in srgb,var(--background) 94%,transparent);font-size:9px;color:var(--muted-foreground);box-shadow:0 8px 24px rgba(0,0,0,.08);backdrop-filter:blur(12px)}.mnem-legend [role=group]{height:24px}.mnem-legend [role=group] button{height:22px;padding:0 7px;font-size:9px}.mnem-legend-items{display:flex;align-items:center;gap:9px}.mnem-legend-row{display:flex;align-items:center;gap:5px;white-space:nowrap}.mnem-legend-row span{color:var(--muted-foreground);opacity:.75}.mnem-dot{width:7px;height:7px;border-radius:50%;flex:none}.mnem-dot-entity{background:var(--ui-accent)}.mnem-dot-memory{background:var(--foreground);opacity:.72}.mnem-map-help{position:absolute;right:12px;bottom:14px;font-size:9px;color:var(--muted-foreground)}
-    .mnem-inspector,.mnem-detail{min-width:0;border-left:1px solid var(--border);padding:18px;overflow:auto;background:var(--background)}.mnem-inspector-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.mnem-inspector h2,.mnem-detail h2{font-size:18px;line-height:1.25;margin:12px 0}.mnem-inspector-content{font-size:11px;line-height:1.55;color:var(--muted-foreground)}.mnem-badges{display:flex;gap:6px;flex-wrap:wrap}.mnem-meta{margin:20px 0}.mnem-meta>div{display:grid;grid-template-columns:86px minmax(0,1fr);gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:11px}.mnem-meta dt{color:var(--muted-foreground)}.mnem-meta dd{margin:0;text-align:right;overflow-wrap:anywhere}.mnem-linked h3{display:flex;justify-content:space-between;margin:20px 0 6px;font-size:11px}.mnem-linked button{display:block;width:100%;padding:9px 0;border:0;border-top:1px solid var(--border);background:transparent;color:var(--foreground);text-align:left;cursor:pointer}.mnem-linked button span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}.mnem-linked button small{color:var(--ui-accent);font-size:9px}.mnem-linked p{color:var(--muted-foreground);font-size:11px}.mnem-maintenance{display:flex;gap:8px;margin:14px 0}
-    .mnem-browser{min-height:100%;display:flex;flex-direction:column}.mnem-browser-toolbar{display:flex;align-items:center;gap:18px;padding-bottom:16px;border-bottom:1px solid var(--border)}.mnem-browser-search{flex:1;max-width:620px}.mnem-browser-layout{display:grid;grid-template-columns:minmax(0,1fr);min-height:0}.mnem-browser-layout.has-detail{grid-template-columns:minmax(0,1fr) 320px}.mnem-memory-list{min-width:0}.mnem-memory-row{display:block;width:100%;padding:15px 8px;border:0;border-bottom:1px solid var(--border);background:transparent;color:var(--foreground);text-align:left;cursor:pointer}.mnem-memory-row:hover,.mnem-memory-row.is-selected{background:var(--accent)}.mnem-memory-row p{margin:8px 0 6px;font-size:12px;line-height:1.5}.mnem-memory-row small{color:var(--muted-foreground);font-size:10px}.mnem-row-skeleton{height:72px;margin:10px 0}.mnem-detail{position:sticky;top:0;height:calc(100vh - 190px)}.mnem-detail-content{font-size:12px;line-height:1.6}.mnem-readonly-note{display:flex;align-items:center;gap:7px;padding:9px;border:1px solid var(--border);color:var(--muted-foreground);font-size:10px}
-    .mnem-timeline{max-width:900px;padding-top:8px}.mnem-timeline section>header{display:flex;align-items:center;gap:8px;padding:16px 0 8px}.mnem-timeline section>header h2{font-size:11px;margin:0;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.11em}.mnem-timeline-row{display:grid;grid-template-columns:30px minmax(0,1fr);gap:12px;padding:11px 0;border-bottom:1px solid var(--border)}.mnem-timeline-icon{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border:1px solid var(--border);border-radius:50%;color:var(--ui-accent)}.mnem-timeline-icon svg{width:13px}.mnem-timeline-row>div>div{display:flex;align-items:center;justify-content:space-between;gap:16px}.mnem-timeline-row strong{font-size:11px}.mnem-timeline-row span,.mnem-timeline-row p{color:var(--muted-foreground);font-size:10px}.mnem-timeline-row p{margin:4px 0 0;line-height:1.5}
-    @media(max-width:900px){.mnem-header{padding:12px 18px}.mnem-content{padding:18px}.mnem-content.is-explore{padding:12px 18px 18px}.mnem-tabs{padding:0 18px}.mnem-overview-grid{grid-template-columns:1fr}.mnem-stats{grid-template-columns:repeat(2,1fr)}.mnem-stat:nth-child(2){border-right:0}.mnem-stat:nth-child(-n+2){border-bottom:1px solid var(--border)}.mnem-map-layout.has-inspector{grid-template-columns:1fr}.mnem-inspector,.mnem-detail{border-left:0;border-top:1px solid var(--border)}.mnem-browser-layout.has-detail{grid-template-columns:1fr}.mnem-detail{position:relative;height:auto}.mnem-map-help{display:none}.mnem-map-search{width:130px}.mnem-map-modes{gap:4px}.mnem-profile span{display:none}}
+    .mnem-legend{position:absolute;left:12px;bottom:12px;display:flex;align-items:center;gap:8px;padding:5px 7px;border:1px solid var(--border);background:color-mix(in srgb,var(--background) 94%,transparent);font-size:9px;color:var(--muted-foreground);box-shadow:0 8px 24px rgba(0,0,0,.08);backdrop-filter:blur(12px)}.mnem-legend [role=group]{height:24px}.mnem-legend [role=group] button{height:22px;padding:0 7px;font-size:9px}.mnem-legend-items{display:flex;align-items:center;gap:9px}.mnem-legend-row{display:flex;align-items:center;gap:5px;white-space:nowrap}.mnem-legend-row span{color:var(--muted-foreground);opacity:.75}.mnem-dot{width:7px;height:7px;border-radius:50%;flex:none}.mnem-dot-entity{background:var(--ui-accent)}.mnem-dot-memory{background:var(--foreground);opacity:.72}.mnem-line-key{width:12px;height:1px;background:var(--border)}.mnem-map-help{position:absolute;right:12px;bottom:14px;font-size:9px;color:var(--muted-foreground)}
+    .mnem-inspector{position:absolute;z-index:6;top:62px;right:12px;bottom:12px;width:min(340px,calc(100% - 24px));min-width:0;border:1px solid var(--border);padding:18px;overflow:auto;background:color-mix(in srgb,var(--background) 97%,transparent);box-shadow:0 18px 48px rgba(0,0,0,.18);backdrop-filter:blur(16px)}.mnem-detail{min-width:0;border-left:1px solid var(--border);padding:18px;overflow:auto;background:var(--background)}.mnem-inspector-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.mnem-inspector h2,.mnem-detail h2{font-size:18px;line-height:1.25;margin:12px 0}.mnem-inspector-content{font-size:11px;line-height:1.55;color:var(--muted-foreground)}.mnem-badges{display:flex;gap:6px;flex-wrap:wrap}.mnem-badge.is-working{border-color:color-mix(in srgb,#38bdf8 42%,var(--border));background:color-mix(in srgb,#38bdf8 12%,transparent);color:color-mix(in srgb,#38bdf8 78%,var(--foreground))}.mnem-badge.is-episodic{border-color:color-mix(in srgb,#a78bfa 45%,var(--border));background:color-mix(in srgb,#a78bfa 12%,transparent);color:color-mix(in srgb,#a78bfa 78%,var(--foreground))}.mnem-badge.is-relationship{border-color:color-mix(in srgb,#34d399 42%,var(--border));background:color-mix(in srgb,#34d399 12%,transparent);color:color-mix(in srgb,#34d399 78%,var(--foreground))}.mnem-badge.is-consolidation{border-color:color-mix(in srgb,#f59e0b 42%,var(--border));background:color-mix(in srgb,#f59e0b 12%,transparent);color:color-mix(in srgb,#f59e0b 78%,var(--foreground))}.mnem-badge.is-trust-stated{border-color:color-mix(in srgb,#22c55e 38%,var(--border));color:color-mix(in srgb,#22c55e 72%,var(--foreground))}.mnem-badge.is-trust-unknown{color:var(--muted-foreground)}.mnem-badge.is-trust-inferred,.mnem-badge.is-trust-imported,.mnem-badge.is-trust-tool{border-color:color-mix(in srgb,#f59e0b 38%,var(--border));color:color-mix(in srgb,#f59e0b 72%,var(--foreground))}.mnem-meta{margin:20px 0}.mnem-meta>div{display:grid;grid-template-columns:86px minmax(0,1fr);gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:11px}.mnem-meta dt{color:var(--muted-foreground)}.mnem-meta dd{margin:0;text-align:right;overflow-wrap:anywhere}.mnem-linked h3{display:flex;justify-content:space-between;margin:20px 0 6px;font-size:11px}.mnem-linked button{display:block;width:100%;padding:9px 0;border:0;border-top:1px solid var(--border);background:transparent;color:var(--foreground);text-align:left;cursor:pointer}.mnem-linked button span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}.mnem-linked button small{color:var(--ui-accent);font-size:9px}.mnem-linked p{color:var(--muted-foreground);font-size:11px}.mnem-maintenance{display:flex;gap:8px;margin:14px 0}
+    .mnem-browser{min-height:100%;display:flex;flex-direction:column}.mnem-browser-toolbar{display:flex;align-items:center;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--border)}.mnem-browser-search{flex:1;max-width:520px}.mnem-browser-context{margin:10px 0 0;color:var(--muted-foreground);font-size:10px;line-height:1.45}.mnem-browser-layout{display:grid;grid-template-columns:minmax(0,1fr);min-height:0}.mnem-browser-layout.has-detail{grid-template-columns:minmax(0,1fr) 320px}.mnem-memory-list{min-width:0}.mnem-memory-row{display:grid;grid-template-columns:minmax(0,1fr) 112px;align-items:center;gap:20px;width:100%;padding:15px 8px;border:0;border-bottom:1px solid var(--border);background:transparent;color:var(--foreground);text-align:left;cursor:pointer}.mnem-memory-row:hover,.mnem-memory-row.is-selected{background:var(--accent)}.mnem-memory-row p{margin:8px 0 6px;font-size:12px;line-height:1.5}.mnem-memory-row small{color:var(--muted-foreground);font-size:10px}.mnem-strength{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;outline:none}.mnem-strength>span{grid-column:1;display:block;height:5px;overflow:hidden;background:var(--accent)}.mnem-strength>span>i{display:block;height:100%;background:var(--ui-accent)}.mnem-strength>strong{grid-column:2;grid-row:1 / span 2;font-size:18px;font-variant-numeric:tabular-nums}.mnem-strength>small{grid-column:1;font-size:8px;letter-spacing:.1em;text-transform:uppercase}.mnem-row-skeleton{height:72px;margin:10px 0}.mnem-detail{position:sticky;top:0;height:calc(100vh - 190px)}.mnem-detail-content{font-size:12px;line-height:1.6}.mnem-readonly-note{display:flex;align-items:center;gap:7px;padding:9px;border:1px solid var(--border);color:var(--muted-foreground);font-size:10px}
+    .mnem-timeline{max-width:980px;padding-top:8px}.mnem-timeline section>header{display:flex;align-items:center;gap:8px;padding:16px 0 8px}.mnem-timeline section>header h2{font-size:11px;margin:0;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.11em}.mnem-timeline-row{display:grid;grid-template-columns:30px minmax(0,1fr);gap:12px;padding:11px 0;border-bottom:1px solid var(--border)}.mnem-timeline-icon{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border:1px solid var(--border);border-radius:50%;color:var(--ui-accent)}.mnem-timeline-icon.is-triple{color:#34d399}.mnem-timeline-icon.is-consolidation{color:#f59e0b}.mnem-timeline-icon svg{width:13px}.mnem-timeline-row>div>div{display:flex;align-items:center;justify-content:space-between;gap:16px}.mnem-timeline-title{display:flex;align-items:center;gap:7px;min-width:0}.mnem-timeline-row strong{font-size:11px}.mnem-timeline-row span,.mnem-timeline-row p{color:var(--muted-foreground);font-size:10px}.mnem-timeline-row p{margin:4px 0 0;line-height:1.5}
+    @media(max-width:900px){.mnem-header{padding:12px 18px}.mnem-content{padding:18px}.mnem-content.is-explore{padding:12px 18px 18px}.mnem-tabs{padding:0 18px}.mnem-overview-grid,.mnem-chart-grid{grid-template-columns:1fr}.mnem-stats{grid-template-columns:repeat(2,1fr)}.mnem-stat:nth-child(2){border-right:0}.mnem-stat:nth-child(-n+2){border-bottom:1px solid var(--border)}.mnem-detail{border-left:0;border-top:1px solid var(--border)}.mnem-browser-toolbar{align-items:stretch;flex-wrap:wrap}.mnem-browser-search{max-width:none;min-width:240px}.mnem-browser-layout.has-detail{grid-template-columns:1fr}.mnem-detail{position:relative;height:auto}.mnem-memory-row{grid-template-columns:minmax(0,1fr) 94px}.mnem-map-help{display:none}.mnem-map-search{width:130px}.mnem-map-modes{gap:4px}.mnem-profile span{display:none}}
   `}</style>
 }
 
@@ -759,7 +844,7 @@ const plugin: HermesPlugin = {
         id: 'sidebar',
         area: SIDEBAR_NAV_AREA,
         order: 45,
-        data: { path: ROUTE, label: 'Memory', codicon: 'database' }
+        data: { path: ROUTE, label: 'Memory', codicon: 'graph' }
       },
       {
         id: 'open',

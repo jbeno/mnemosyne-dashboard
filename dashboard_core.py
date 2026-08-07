@@ -1895,7 +1895,14 @@ class DashboardStore:
             },
         }
 
-    def constellation(self, limit: int = 240) -> dict[str, Any]:
+    def constellation(self, limit: int = 240, *, include_knowledge: bool = True) -> dict[str, Any]:
+        """Build the legacy combined visualization payload.
+
+        ``include_knowledge`` remains true for compatibility with the
+        standalone dashboard's historical constellation.  Native clients use
+        :meth:`memory_map` instead so dashboard-derived ``mentions`` links are
+        not conflated with Mnemosyne's structured knowledge relations.
+        """
         limit = max(40, min(int(limit or 240), 600))
         nodes_by_label: dict[str, dict[str, Any]] = {}
         edges: list[dict[str, Any]] = []
@@ -1913,14 +1920,15 @@ class DashboardStore:
                 node["category"] = category
             return node
 
-        triples = self.triples(limit=limit)
-        for t in triples:
-            ts = t.get("created_at") or t.get("valid_from") or ""
-            s_label, o_label = str(t.get("subject") or ""), str(t.get("object") or "")
-            category = self._category_for_text(f"{s_label} {t.get('predicate')} {o_label}")
-            s = touch(s_label, weight=float(t.get("confidence") or 0.8), category=category, timestamp=ts)
-            o = touch(o_label, weight=float(t.get("confidence") or 0.8), category=category, timestamp=ts)
-            edges.append({"id": f"e{t.get('id')}", "source": s["id"], "target": o["id"], "label": t.get("predicate"), "kind": "triple", "item": t})
+        if include_knowledge:
+            triples = self.triples(limit=limit)
+            for t in triples:
+                ts = t.get("created_at") or t.get("valid_from") or ""
+                s_label, o_label = str(t.get("subject") or ""), str(t.get("object") or "")
+                category = self._category_for_text(f"{s_label} {t.get('predicate')} {o_label}")
+                s = touch(s_label, weight=float(t.get("confidence") or 0.8), category=category, timestamp=ts)
+                o = touch(o_label, weight=float(t.get("confidence") or 0.8), category=category, timestamp=ts)
+                edges.append({"id": f"e{t.get('id')}", "source": s["id"], "target": o["id"], "label": t.get("predicate"), "kind": "triple", "item": t})
 
         memories = self.list_memories(kind="all", status="active", sort="importance", limit=120)
         for m in memories:
@@ -1939,6 +1947,15 @@ class DashboardStore:
         edges = [e for e in edges if e["source"] in kept and e["target"] in kept][:limit * 2]
         clusters = Counter(str(n.get("category") or "Other") for n in nodes)
         return {"read_only": True, "nodes": nodes, "edges": edges, "clusters": [{"label": k, "count": v} for k, v in clusters.most_common()]}
+
+    def memory_map(self, limit: int = 240) -> dict[str, Any]:
+        """Return retained memories and dashboard-derived entity mentions.
+
+        This is a navigation aid over memory content, not Mnemosyne's
+        subject/predicate/object knowledge graph.  The latter is exposed by
+        :meth:`graph` and preserves predicates on its edges.
+        """
+        return self.constellation(limit=limit, include_knowledge=False)
 
     def global_search(self, q: str = "", limit: int = 30) -> dict[str, Any]:
         q = (q or "").strip()

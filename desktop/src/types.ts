@@ -34,9 +34,13 @@ export interface GraphEdge {
   target: string
   label?: string
   kind?: string
+  predicate?: string
+  subject?: string
+  object?: string
+  knowledge_store?: string
 }
 
-export interface Constellation {
+export interface GraphDataset {
   read_only: boolean
   nodes: GraphNode[]
   edges: GraphEdge[]
@@ -45,6 +49,9 @@ export interface Constellation {
 
 export interface Stats {
   counts: Record<string, number>
+  by_veracity: Array<{ veracity: string; count: number; weight: number }>
+  by_degradation: Array<{ degradation_tier: number; degradation_label: string; count: number; weight: number }>
+  working_memory: { total: number; unconsolidated: number; consolidated: number }
   review: { active_candidates: number; active_non_stated: number }
   degradation: { degraded: number; due_tier2: number; due_tier3: number }
   recent: MemoryItem[]
@@ -64,7 +71,9 @@ export interface OverviewPayload {
   database: { path: string; label: string; available: boolean }
   stats: Stats
   activity: { days: number; start: string; end: string; series: ActivityPoint[] }
-  constellation: Constellation
+  constellation: GraphDataset
+  memory_map: GraphDataset
+  knowledge_graph: GraphDataset
 }
 
 export interface MemoriesPayload {

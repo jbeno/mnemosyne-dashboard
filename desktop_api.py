@@ -91,7 +91,10 @@ def _empty_activity(days: int) -> dict[str, Any]:
 
 def _empty_stats() -> dict[str, Any]:
     return {
-        "counts": {"working_memory": 0, "episodic_memory": 0, "triples": 0, "consolidations": 0},
+        "counts": {"working_memory": 0, "episodic_memory": 0, "triples": 0, "consolidation_log": 0},
+        "working_memory": {"total": 0, "unconsolidated": 0, "consolidated": 0},
+        "by_veracity": [],
+        "by_degradation": [],
         "review": {"active_candidates": 0, "active_non_stated": 0},
         "degradation": {"degraded": 0, "due_tier2": 0, "due_tier3": 0},
         "recent": [],
@@ -100,6 +103,16 @@ def _empty_stats() -> dict[str, Any]:
 
 def _empty_constellation() -> dict[str, Any]:
     return {"read_only": True, "nodes": [], "edges": [], "clusters": []}
+
+
+def _knowledge_graph(store: DashboardStore, limit: int) -> dict[str, Any]:
+    graph = store.graph(limit=limit)
+    graph["read_only"] = True
+    graph["clusters"] = []
+    for edge in graph.get("edges", []):
+        edge["label"] = edge.get("predicate") or "related"
+        edge["kind"] = "triple"
+    return graph
 
 
 def health_payload() -> dict[str, Any]:
@@ -143,7 +156,11 @@ def overview_payload(
         },
         "stats": stats,
         "activity": store.activity_series(days=safe_days) if available else _empty_activity(safe_days),
+        # Keep ``constellation`` during the native-plugin transition, but give
+        # clients explicit, semantically distinct datasets going forward.
         "constellation": store.constellation(limit=safe_map_limit) if available else _empty_constellation(),
+        "memory_map": store.memory_map(limit=safe_map_limit) if available else _empty_constellation(),
+        "knowledge_graph": _knowledge_graph(store, safe_map_limit) if available else _empty_constellation(),
     }
 
 
