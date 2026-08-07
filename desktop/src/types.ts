@@ -61,7 +61,7 @@ export interface ActivityPoint {
 export interface OverviewPayload {
   profile: string
   capabilities: { read: boolean; manage: boolean; forget: boolean }
-  database: { path: string; label: string }
+  database: { path: string; label: string; available: boolean }
   stats: Stats
   activity: { days: number; start: string; end: string; series: ActivityPoint[] }
   constellation: Constellation

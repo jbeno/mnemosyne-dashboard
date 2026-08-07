@@ -1,7 +1,7 @@
 {
   "name": "mnemosyne-dashboard",
   "label": "Mnemosyne Memory",
-  "description": "Profile-aware read-only memory data for the Mnemosyne Desktop experience.",
+  "description": "Profile-aware memory exploration and locally gated maintenance for Hermes Desktop.",
   "icon": "Database",
   "version": "0.15.0",
   "tab": {

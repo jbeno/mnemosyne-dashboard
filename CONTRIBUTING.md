@@ -48,9 +48,14 @@ Please keep these invariants unless a change explicitly documents and tests a di
   fallback until the React cutover has completed its soak period.
 - Installing the native Hermes Desktop bundle must remain an explicit opt-in.
   Once installed it may activate on discovery, must remain profile-aware, and
-  must stay read-only unless a different mutation model is explicitly
-  documented and tested. It must use `ctx.rest` rather than bypassing the
-  active profile.
+  must use `ctx.rest` rather than bypassing the active profile. Native browsing
+  stays read-only. Native mutations must be loopback-only, advertise no manage
+  capability until that profile's Memory admin mode is enabled, and preserve
+  the same backup, audit, supersede, and expire semantics as the web dashboard;
+  never add a native hard-delete shortcut.
+- Hermes' global profile rail is authoritative. Do not add a second plugin-owned
+  profile selector unless the Desktop SDK exposes and documents a synchronized
+  profile mutation API.
 - `desktop/plugin.js` is a generated, checked-in single ESM bundle. Runtime
   imports are limited to `@hermes/plugin-sdk`, `react`, and
   `react/jsx-runtime`; do not add a separate Desktop dependency graph.

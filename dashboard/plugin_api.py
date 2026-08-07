@@ -3,8 +3,9 @@ from __future__ import annotations
 import logging
 import sys
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException, Query, Request
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 if str(PLUGIN_ROOT) not in sys.path:
@@ -12,6 +13,8 @@ if str(PLUGIN_ROOT) not in sys.path:
 
 from desktop_api import (  # noqa: E402
     constellation_payload,
+    correct_memory_payload,
+    forget_memory_payload,
     health_payload,
     memories_payload,
     memory_payload,
@@ -24,6 +27,8 @@ logger = logging.getLogger(__name__)
 
 
 def _translate_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, PermissionError):
+        return HTTPException(status_code=403, detail=str(exc))
     if isinstance(exc, FileNotFoundError):
         return HTTPException(status_code=404, detail=str(exc))
     if isinstance(exc, ValueError):
@@ -40,10 +45,15 @@ def health():
         raise _translate_error(exc) from exc
 
 
+def _is_loopback(request: Request) -> bool:
+    host = request.client.host if request.client else ""
+    return host in {"127.0.0.1", "::1", "localhost", "testclient"}
+
+
 @router.get("/overview")
-def overview(days: int = Query(30), map_limit: int = Query(220)):
+def overview(request: Request, days: int = Query(30), map_limit: int = Query(220)):
     try:
-        return overview_payload(days=days, map_limit=map_limit)
+        return overview_payload(days=days, map_limit=map_limit, local_request=_is_loopback(request))
     except Exception as exc:
         raise _translate_error(exc) from exc
 
@@ -75,6 +85,31 @@ def memories(
 def memory(memory_id: str):
     try:
         return memory_payload(memory_id)
+    except Exception as exc:
+        raise _translate_error(exc) from exc
+
+
+@router.post("/memory/{memory_id}/correct")
+def correct_memory(request: Request, memory_id: str, body: Annotated[dict, Body()]):
+    if not _is_loopback(request):
+        raise HTTPException(status_code=403, detail="Memory changes are available only from local Hermes Desktop")
+    try:
+        importance = body.get("importance")
+        return correct_memory_payload(
+            memory_id,
+            str(body.get("content") or ""),
+            float(importance) if importance is not None else None,
+        )
+    except Exception as exc:
+        raise _translate_error(exc) from exc
+
+
+@router.post("/memory/{memory_id}/forget")
+def forget_memory(request: Request, memory_id: str):
+    if not _is_loopback(request):
+        raise HTTPException(status_code=403, detail="Memory changes are available only from local Hermes Desktop")
+    try:
+        return forget_memory_payload(memory_id)
     except Exception as exc:
         raise _translate_error(exc) from exc
 

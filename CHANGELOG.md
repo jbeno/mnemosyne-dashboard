@@ -2,13 +2,25 @@
 
 ## Unreleased
 
-- Add an opt-in native Hermes Desktop memory experience with an overview,
-  profile-aware activity history, interactive searchable memory map, linked-node
-  inspection, retained-memory browser, and grouped timeline without opening the
-  standalone dashboard.
+- Add an opt-in native Hermes Desktop memory experience centered on an immersive,
+  rotating 3D explorer with 2D switching, Constellation and Neural Map modes,
+  search, labels, orbit/pan/zoom controls, fullscreen inspection, and linked-node
+  navigation without opening the standalone dashboard.
+- Move activity metrics and charts to a dedicated native Stats tab while keeping
+  timeline and retained-memory browsing directly accessible.
+- Build the native surface from Hermes Desktop SDK primitives and let Hermes'
+  global profile rail remain the authoritative profile selector.
 - Add a hidden namespaced Hermes backend API for the Desktop plugin. All native
-  reads use the active profile's configured Mnemosyne database through SQLite
-  `mode=ro`; native management and deletion capabilities remain disabled.
+  reads prefer the active profile's canonical Mnemosyne database through SQLite
+  `mode=ro`; profiles with no database render a ready empty state instead of an
+  error.
+- Add locally gated native Correct and Forget actions. Correcting supersedes the
+  original with a replacement; forgetting expires it. Both require that profile's
+  Memory admin mode, create a verified backup, retain audit history, and avoid
+  hard deletion.
+- Discover existing Hermes profiles during Desktop installation, safely link the
+  backend into their plugin directories, and enable it through the Hermes CLI so
+  the global profile switcher reliably changes memory stores.
 - Ship a dependency-free single-file Desktop bundle, an explicit installer,
   plugin install tool, build verification, and live enable/disable support
   through Hermes Desktop Settings.

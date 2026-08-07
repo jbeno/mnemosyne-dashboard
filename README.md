@@ -97,10 +97,13 @@ hermes plugins install jbeno/mnemosyne-dashboard --enable --force
 ### Native Hermes Desktop experience
 
 Mnemosyne Dashboard also ships an optional native Desktop plugin. It adds a
-**Memory** destination directly to Hermes Desktop with a profile-aware overview,
-interactive memory map, timeline, retained-memory search, and linked-node
-inspection. The native view uses the active Hermes profile and does not require
-the standalone web server or a browser tab.
+**Memory** destination directly to Hermes Desktop. The default view is an
+immersive, rotating 3D memory explorer with 2D switching, Constellation and
+Neural Map topologies, search, labels, orbit/pan/zoom controls, fullscreen
+inspection, and linked-node navigation. Timeline, retained-memory search, and a
+separate Stats dashboard stay one tab away. The native view uses Hermes'
+component SDK and active global profile; it does not require the standalone web
+server or a browser tab.
 
 After installing and enabling the Python plugin above, install its checked-in
 Desktop bundle:
@@ -115,11 +118,21 @@ the separate installer is the opt-in step; it can be disabled live under
 **Settings → Plugins**. You can also ask Hermes to run the
 `mnemosyne_dashboard_install_desktop_plugin` tool.
 
-The first native milestone is read-only. It opens SQLite through the same
-`mode=ro` store as the web dashboard and advertises no manage/delete capability.
-Memory maintenance remains in the password-gated web dashboard while the native
-read path soaks. Each Desktop request is routed through the backend for the
-currently active profile, so switching profiles also switches memory stores.
+Ordinary native browsing opens SQLite through the same `mode=ro` store as the
+web dashboard. When that profile's local Memory admin mode is explicitly
+enabled, the inspector also offers two recoverable maintenance actions:
+**Correct** creates a replacement and marks the prior record superseded;
+**Forget** creates a verified backup and expires the record without hard
+deleting its row. The backend independently gates both actions to local Hermes
+Desktop requests and rechecks Memory admin mode.
+
+Each Desktop request is routed through the backend for the currently active
+Hermes profile. Use Hermes' global profile control in the lower-left rail;
+switching it changes the plugin's database and invalidates profile-scoped data.
+The Desktop installer discovers existing profiles, links this backend into each
+profile without overwriting unrelated plugins, and enables it through the
+Hermes CLI. Restart Hermes Desktop after installation so those backend routes
+reload.
 
 ## Updating
 

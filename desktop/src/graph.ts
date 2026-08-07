@@ -3,6 +3,7 @@ import type { GraphEdge, GraphNode } from './types'
 export interface PositionedNode extends GraphNode {
   x: number
   y: number
+  z: number
   radius: number
 }
 
@@ -47,6 +48,7 @@ export function layoutGraph(nodes: GraphNode[], edges: GraphEdge[], topology: Gr
       ...node,
       x: 500 + Math.cos(angle) * distance,
       y: 310 + Math.sin(angle) * distance * 0.68,
+      z: (seededUnit(`${node.id}:z`) - 0.5) * 420,
       radius: Math.max(4.5, Math.min(15, 4 + Math.sqrt(weight + connections) * 2.1))
     }
   })
@@ -76,6 +78,7 @@ function layoutNeural(nodes: GraphNode[], edges: GraphEdge[], degree: Map<string
       ...node,
       x: regionX + Math.cos(angle) * orbit,
       y: regionY + Math.sin(angle) * orbit * 0.72,
+      z: (seededUnit(`${node.id}:z`) - 0.5) * 360,
       radius: Math.max(4.5, Math.min(15, 4 + Math.sqrt(weight + connections) * 2.1))
     })
   }
@@ -97,6 +100,7 @@ function layoutNeural(nodes: GraphNode[], edges: GraphEdge[], degree: Map<string
       ...node,
       x: baseX + Math.cos(angle) * distance,
       y: baseY + Math.sin(angle) * distance * 0.72,
+      z: (parent?.z ?? 0) + (seededUnit(`${node.id}:z`) - 0.5) * 120,
       radius: Math.max(4.5, Math.min(14, 4 + Math.sqrt(weight + connections) * 1.9))
     })
   })

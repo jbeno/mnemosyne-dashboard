@@ -22,6 +22,14 @@ file:<db_path>?mode=ro
 
 Memory browsing opens SQLite in read-only mode. Optional maintenance endpoints are disabled by default, limited to audited Mnemosyne-style supersede/expire/importance updates, and require password auth before LAN/non-local use.
 
+The optional native Hermes Desktop plugin follows the same model. Its ordinary
+queries use the active profile's read-only store through Hermes' profile-scoped
+`ctx.rest` transport. Native Correct and Forget controls are advertised only
+when the request is local and that profile's Memory admin mode is enabled; the
+backend rechecks both conditions on every mutation. Correct creates a
+replacement and supersedes the original. Forget expires the original after an
+integrity-checked backup. Neither action hard-deletes memory rows.
+
 ## Switching databases
 
 The dashboard can switch which Mnemosyne database is active at runtime through `POST /api/databases/select`. This is a state-changing request and is gated by the same authentication as other writes.

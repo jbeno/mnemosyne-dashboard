@@ -11,6 +11,5 @@ if str(ROOT) not in sys.path:
 
 from desktop_install import install_desktop_plugin  # noqa: E402
 
-
 if __name__ == "__main__":
     print(json.dumps(install_desktop_plugin(), indent=2))
