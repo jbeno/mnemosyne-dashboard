@@ -45,5 +45,5 @@ def install_desktop_plugin() -> dict[str, Any]:
         "ok": True,
         "source": str(source),
         "target": str(target),
-        "message": "Desktop plugin installed. In Hermes Desktop, open Settings > Plugins, select Rescan, then enable Mnemosyne Memory.",
+        "message": "Desktop plugin installed. Restart Hermes Desktop or use Reload desktop plugins from the command palette; Mnemosyne Memory can be disabled in Settings > Plugins.",
     }

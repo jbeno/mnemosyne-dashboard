@@ -1132,7 +1132,7 @@ function MemoryPage({ ctx }) {
 var plugin = {
   id: PLUGIN_ID,
   name: "Mnemosyne Memory",
-  defaultEnabled: false,
+  defaultEnabled: true,
   register(ctx) {
     ctx.registerMany([
       {

@@ -10,8 +10,8 @@
   reads use the active profile's configured Mnemosyne database through SQLite
   `mode=ro`; native management and deletion capabilities remain disabled.
 - Ship a dependency-free single-file Desktop bundle, an explicit installer,
-  plugin install tool, build verification, and documentation for discovery and
-  enablement through Hermes Desktop Settings.
+  plugin install tool, build verification, and live enable/disable support
+  through Hermes Desktop Settings.
 
 ## 0.15.0
 

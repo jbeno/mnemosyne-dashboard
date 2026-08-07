@@ -109,10 +109,10 @@ Desktop bundle:
 python3 ~/.hermes/plugins/mnemosyne-dashboard/scripts/install_desktop_plugin.py
 ```
 
-Then open **Hermes Desktop → Settings → Plugins**, select **Rescan**, and enable
-**Mnemosyne Memory**. It is intentionally disabled on first discovery so merely
-installing the backend never adds a new navigation destination without your
-choice. You can also ask Hermes to run the
+Then restart Hermes Desktop, or run **Reload desktop plugins** from its command
+palette. **Mnemosyne Memory** is enabled when first discovered because running
+the separate installer is the opt-in step; it can be disabled live under
+**Settings → Plugins**. You can also ask Hermes to run the
 `mnemosyne_dashboard_install_desktop_plugin` tool.
 
 The first native milestone is read-only. It opens SQLite through the same

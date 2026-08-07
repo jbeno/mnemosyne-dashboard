@@ -46,9 +46,11 @@ Please keep these invariants unless a change explicitly documents and tests a di
 - LAN exposure is the default and should be documented with auth/firewall guidance.
 - The React dashboard is served at `/`; `/legacy` remains a temporary local
   fallback until the React cutover has completed its soak period.
-- The native Hermes Desktop plugin must remain opt-in, profile-aware, and
-  read-only unless a different mutation model is explicitly documented and
-  tested. It must use `ctx.rest` rather than bypassing the active profile.
+- Installing the native Hermes Desktop bundle must remain an explicit opt-in.
+  Once installed it may activate on discovery, must remain profile-aware, and
+  must stay read-only unless a different mutation model is explicitly
+  documented and tested. It must use `ctx.rest` rather than bypassing the
+  active profile.
 - `desktop/plugin.js` is a generated, checked-in single ESM bundle. Runtime
   imports are limited to `@hermes/plugin-sdk`, `react`, and
   `react/jsx-runtime`; do not add a separate Desktop dependency graph.
