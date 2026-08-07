@@ -159,9 +159,10 @@ export function ThreeNetworkMap({
         labelLayer.style.position = "absolute"
         labelLayer.style.zIndex = "4"
         host.append(labelLayer)
-        const importantNodeIds = new Set([...spatial]
-          .sort((left, right) => spatialLabelPriority(right) - spatialLabelPriority(left))
-          .slice(0, mode === "graph" ? 36 : 28)
+        const largestNodeRadius = Math.max(0, ...spatial.map((node) => node.radius))
+        const labelRadiusThreshold = Math.max(7.2, largestNodeRadius * 0.6)
+        const importantNodeIds = new Set(spatial
+          .filter((node) => node.radius >= labelRadiusThreshold)
           .map((node) => node.id))
         const importantEdgeIds = new Set(visibleEdges
           .filter((edge) => edge.predicate || edge.label)
@@ -448,10 +449,6 @@ export function ThreeNetworkMap({
       <p className="pointer-events-none absolute bottom-3 right-3 hidden text-xs text-muted-foreground sm:block">Drag to orbit · scroll to zoom · select a node to inspect</p>
     </div>
   )
-}
-
-function spatialLabelPriority(node: SpatialNode) {
-  return node.radius * 8 + node.degree * 2.4 + Math.log2(1 + Number(node.weight || node.count || 0))
 }
 
 function createMapLabel(text: string, kind: "edge" | "node") {

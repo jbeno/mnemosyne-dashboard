@@ -1,5 +1,5 @@
 // desktop/src/plugin.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Badge,
   Button,
@@ -16,6 +16,11 @@ import {
   ROUTES_AREA,
   SIDEBAR_NAV_AREA,
   SearchField,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   SegmentedControl,
   Skeleton,
   Tabs,
@@ -95,12 +100,13 @@ function categoryCounts(nodes) {
 
 // desktop/src/plugin.tsx
 import { jsx, jsxs, Fragment } from "react/jsx-runtime";
-var { Activity, Brain, Clock, Database, Eye, RefreshCw, Starmap } = {
+var { Activity, Brain, ChevronLeft: ArrowLeft, Clock, Database, Eye, RefreshCw, Starmap } = {
   ...icons,
   Database: icons.Box
 };
 var PLUGIN_ID = "mnemosyne-dashboard";
 var ROUTE = "/memory";
+var RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 function errorMessage(error) {
   return error instanceof Error ? error.message : "Mnemosyne memory data could not be loaded.";
 }
@@ -119,6 +125,20 @@ function memoryTime(item) {
 function timestampMs(value) {
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : Date.now();
+}
+function truncateText(value, maximum = 52) {
+  const clean = value.replace(/\s+/g, " ").trim();
+  return clean.length > maximum ? `${clean.slice(0, maximum - 1).trimEnd()}…` : clean;
+}
+function nodeLabel(node) {
+  return truncateText(node.kind === "memory" ? node.preview || node.label : node.label, node.kind === "memory" ? 56 : 40);
+}
+function isRecentNode(node) {
+  if (node.kind !== "memory" || !node.last_seen)
+    return false;
+  const parsed = Date.parse(node.last_seen);
+  const age = Date.now() - parsed;
+  return Number.isFinite(parsed) && age >= 0 && age <= RECENT_WINDOW_MS;
 }
 function TypeBadge({ type }) {
   const normalized = (type || "memory").toLocaleLowerCase();
@@ -374,6 +394,15 @@ function MapLegend({
                 "Memory record"
               ]
             }),
+            mapKind === "memory" && /* @__PURE__ */ jsxs("div", {
+              className: "mnem-legend-row",
+              children: [
+                /* @__PURE__ */ jsx("i", {
+                  className: "mnem-recent-key"
+                }),
+                "Recent (7 days)"
+              ]
+            }),
             /* @__PURE__ */ jsxs("div", {
               className: "mnem-legend-row",
               children: [
@@ -528,6 +557,8 @@ function NodeInspector({
   edges,
   ctx,
   capabilities,
+  canGoBack,
+  onBack,
   onSelect,
   onClose
 }) {
@@ -546,8 +577,24 @@ function NodeInspector({
       /* @__PURE__ */ jsxs("div", {
         className: "mnem-inspector-head",
         children: [
-          /* @__PURE__ */ jsx("span", {
-            children: "Node inspector"
+          /* @__PURE__ */ jsxs("div", {
+            className: "mnem-inspector-nav",
+            children: [
+              canGoBack && /* @__PURE__ */ jsx(Tip, {
+                label: "Back to previous node",
+                children: /* @__PURE__ */ jsx(Button, {
+                  "aria-label": "Back to previous node",
+                  onClick: onBack,
+                  size: "icon-xs",
+                  title: "Back to previous node",
+                  variant: "ghost",
+                  children: /* @__PURE__ */ jsx(ArrowLeft, {})
+                })
+              }),
+              /* @__PURE__ */ jsx("span", {
+                children: "Node inspector"
+              })
+            ]
           }),
           /* @__PURE__ */ jsx(Tip, {
             label: "Close inspector",
@@ -555,6 +602,7 @@ function NodeInspector({
               "aria-label": "Close inspector",
               onClick: onClose,
               size: "icon-xs",
+              title: "Close inspector",
               variant: "ghost",
               children: /* @__PURE__ */ jsx(icons.X, {})
             })
@@ -562,7 +610,7 @@ function NodeInspector({
         ]
       }),
       /* @__PURE__ */ jsx("h2", {
-        children: node.kind === "memory" ? node.preview || node.label : node.label
+        children: nodeLabel(node)
       }),
       /* @__PURE__ */ jsxs("div", {
         className: "mnem-badges",
@@ -654,11 +702,12 @@ function NodeInspector({
             if (!other)
               return null;
             return /* @__PURE__ */ jsxs("button", {
+              "aria-label": `Inspect linked node ${nodeLabel(other)}`,
               onClick: () => onSelect(other.id),
               type: "button",
               children: [
                 /* @__PURE__ */ jsx("span", {
-                  children: other.kind === "memory" ? other.preview || other.label : other.label
+                  children: nodeLabel(other)
                 }),
                 /* @__PURE__ */ jsx("small", {
                   children: edge.label || edge.kind || "linked"
@@ -705,8 +754,11 @@ function MemoryMap({
   ctx,
   immersive = false
 }) {
+  const canvasRef = useRef(null);
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState(null);
+  const [selectionHistory, setSelectionHistory] = useState([]);
+  const [hovered, setHovered] = useState(null);
   const [labels, setLabels] = useState("key");
   const [mapKind, setMapKind] = useState("memory");
   const [colorMode, setColorMode] = useState("type");
@@ -724,7 +776,20 @@ function MemoryMap({
   const normalizedSearch = search.trim().toLocaleLowerCase();
   const matches = useMemo(() => new Set(projected.filter((node) => `${node.label} ${node.preview || ""} ${node.category || ""}`.toLocaleLowerCase().includes(normalizedSearch)).map((node) => node.id)), [normalizedSearch, projected]);
   const selected = selectedId ? byId.get(selectedId) || null : null;
-  const major = useMemo(() => new Set([...projected].sort((a, b) => b.radius - a.radius).slice(0, 20).map((node) => node.id)), [projected]);
+  const major = useMemo(() => {
+    const largest = Math.max(0, ...projected.map((node) => node.radius));
+    const threshold = Math.max(8, largest * 0.64);
+    return new Set(projected.filter((node) => node.radius >= threshold).map((node) => node.id));
+  }, [projected]);
+  const recent = useMemo(() => new Set(graph.nodes.filter(isRecentNode).map((node) => node.id)), [graph.nodes]);
+  const degree = useMemo(() => {
+    const values = new Map;
+    for (const edge of graph.edges) {
+      values.set(edge.source, (values.get(edge.source) || 0) + 1);
+      values.set(edge.target, (values.get(edge.target) || 0) + 1);
+    }
+    return values;
+  }, [graph.edges]);
   const categoryColors = useMemo(() => {
     const categories = [...new Set(graph.nodes.map((node) => node.category || "Other"))].sort();
     return new Map(categories.map((category, index) => [category, MAP_COLORS[index % MAP_COLORS.length]]));
@@ -757,23 +822,77 @@ function MemoryMap({
       return connected.has(node.id);
     return labels === "all" || major.has(node.id);
   };
+  const selectNode = (id) => {
+    if (id === selectedId)
+      return;
+    if (selectedId)
+      setSelectionHistory((history) => [...history, selectedId]);
+    setSelectedId(id);
+  };
+  const clearSelection = () => {
+    setSelectedId(null);
+    setSelectionHistory([]);
+  };
+  const goBack = () => {
+    const next = [...selectionHistory];
+    let prior = next.pop();
+    while (prior && !byId.has(prior))
+      prior = next.pop();
+    setSelectionHistory(next);
+    setSelectedId(prior || null);
+  };
+  const positionHover = (event, node) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect)
+      return;
+    setHovered({
+      id: node.id,
+      x: Math.max(8, Math.min(rect.width - 272, event.clientX - rect.left + 12)),
+      y: Math.max(8, Math.min(rect.height - 58, event.clientY - rect.top + 12))
+    });
+  };
+  const positionFocus = (element, node) => {
+    const canvas = canvasRef.current?.getBoundingClientRect();
+    const target = element.getBoundingClientRect();
+    if (!canvas)
+      return;
+    setHovered({ id: node.id, x: target.right - canvas.left + 8, y: target.top - canvas.top + 8 });
+  };
   const onWheel = (event) => {
     event.preventDefault();
-    const next = Math.max(0.55, Math.min(3.6, view.scale * (event.deltaY > 0 ? 0.9 : 1.1)));
-    setView((current) => ({ ...current, scale: next }));
+    const point = event.currentTarget.createSVGPoint();
+    point.x = event.clientX;
+    point.y = event.clientY;
+    const matrix = event.currentTarget.getScreenCTM();
+    if (!matrix)
+      return;
+    const focal = point.matrixTransform(matrix.inverse());
+    setView((current) => {
+      const scale = Math.max(0.42, Math.min(4.2, current.scale * Math.exp(-event.deltaY * 0.0012)));
+      const ratio = scale / current.scale;
+      return {
+        scale,
+        x: focal.x - (focal.x - current.x) * ratio,
+        y: focal.y - (focal.y - current.y) * ratio
+      };
+    });
   };
   const onPointerDown = (event) => {
     if (event.target !== event.currentTarget)
       return;
+    const rect = event.currentTarget.getBoundingClientRect();
     event.currentTarget.setPointerCapture(event.pointerId);
-    setSelectedId(null);
+    clearSelection();
+    setHovered(null);
     setDrag({
       x: event.clientX,
       y: event.clientY,
       originX: view.x,
       originY: view.y,
       rotationX: rotation.x,
-      rotationY: rotation.y
+      rotationY: rotation.y,
+      unitX: 1000 / Math.max(1, rect.width),
+      unitY: 620 / Math.max(1, rect.height)
     });
   };
   const onPointerMove = (event) => {
@@ -785,14 +904,15 @@ function MemoryMap({
         y: drag.rotationY - (event.clientX - drag.x) * 0.006
       });
     } else {
-      setView((current) => ({ ...current, x: drag.originX + event.clientX - drag.x, y: drag.originY + event.clientY - drag.y }));
+      setView((current) => ({ ...current, x: drag.originX + (event.clientX - drag.x) * drag.unitX, y: drag.originY + (event.clientY - drag.y) * drag.unitY }));
     }
   };
   const onPointerUp = () => setDrag(null);
   const reset = () => {
     setView({ x: 0, y: 0, scale: 1 });
     setRotation({ x: -0.16, y: 0.28 });
-    setSelectedId(null);
+    clearSelection();
+    setHovered(null);
   };
   return /* @__PURE__ */ jsx("section", {
     className: `mnem-map-shell${fullscreen ? " is-fullscreen" : ""}${immersive ? " is-immersive" : ""}`,
@@ -801,6 +921,7 @@ function MemoryMap({
       children: [
         /* @__PURE__ */ jsxs("div", {
           className: "mnem-map-canvas",
+          ref: canvasRef,
           children: [
             /* @__PURE__ */ jsxs("div", {
               className: "mnem-map-modes",
@@ -817,6 +938,7 @@ function MemoryMap({
                   onChange: (value) => {
                     setMapKind(value);
                     reset();
+                    setSearch("");
                   },
                   options: [
                     { id: "memory", label: "Memory map", icon: Brain },
@@ -840,8 +962,10 @@ function MemoryMap({
                   label: paused ? "Resume rotation" : "Pause rotation",
                   children: /* @__PURE__ */ jsx(Button, {
                     "aria-label": paused ? "Resume rotation" : "Pause rotation",
+                    "aria-pressed": paused,
                     onClick: () => setPaused((value) => !value),
                     size: "icon-sm",
+                    title: paused ? "Resume rotation" : "Pause rotation",
                     variant: "ghost",
                     children: paused ? /* @__PURE__ */ jsx(icons.Play, {}) : /* @__PURE__ */ jsx(icons.Pause, {})
                   })
@@ -849,9 +973,11 @@ function MemoryMap({
                 /* @__PURE__ */ jsx(Tip, {
                   label: labels === "all" ? "Show key labels" : "Show all labels",
                   children: /* @__PURE__ */ jsx(Button, {
-                    "aria-label": "Toggle node labels",
+                    "aria-label": labels === "all" ? "Show key labels" : "Show all labels",
+                    "aria-pressed": labels === "all",
                     onClick: () => setLabels((value) => value === "all" ? "key" : "all"),
                     size: "icon-sm",
+                    title: labels === "all" ? "Show key labels" : "Show all labels",
                     variant: labels === "all" ? "secondary" : "ghost",
                     children: /* @__PURE__ */ jsx(Eye, {})
                   })
@@ -862,6 +988,7 @@ function MemoryMap({
                     "aria-label": "Reset map view",
                     onClick: reset,
                     size: "icon-sm",
+                    title: "Reset map view",
                     variant: "ghost",
                     children: /* @__PURE__ */ jsx(RefreshCw, {})
                   })
@@ -872,6 +999,7 @@ function MemoryMap({
                     "aria-label": fullscreen ? "Exit fullscreen" : "Open fullscreen",
                     onClick: () => setFullscreen((value) => !value),
                     size: "icon-sm",
+                    title: fullscreen ? "Exit fullscreen" : "Open fullscreen",
                     variant: "ghost",
                     children: /* @__PURE__ */ jsx(icons.Maximize, {})
                   })
@@ -884,7 +1012,7 @@ function MemoryMap({
               onPointerMove,
               onPointerUp,
               onWheel,
-              role: "img",
+              role: "group",
               viewBox: "0 0 1000 620",
               children: /* @__PURE__ */ jsxs("g", {
                 transform: `translate(${view.x} ${view.y}) scale(${view.scale})`,
@@ -916,17 +1044,35 @@ function MemoryMap({
                   }),
                   [...projected].sort((a, b) => b.depth - a.depth).map((node) => /* @__PURE__ */ jsxs("g", {
                     className: `mnem-node${selectedId === node.id ? " is-selected" : selectedId && connected.has(node.id) ? " is-connected" : ""}`,
+                    "aria-describedby": hovered?.id === node.id ? "mnem-node-tooltip" : undefined,
+                    "aria-label": `${nodeLabel(node)}, ${degree.get(node.id) || 0} connections`,
                     onClick: (event) => {
                       event.stopPropagation();
-                      setSelectedId(node.id);
+                      selectNode(node.id);
                     },
+                    onBlur: () => setHovered(null),
+                    onFocus: (event) => positionFocus(event.currentTarget, node),
+                    onKeyDown: (event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        selectNode(node.id);
+                      }
+                    },
+                    onPointerEnter: (event) => positionHover(event, node),
+                    onPointerLeave: () => setHovered(null),
+                    onPointerMove: (event) => positionHover(event, node),
                     opacity: opacity(node.id) * node.depthOpacity,
                     role: "button",
                     tabIndex: 0,
                     transform: `translate(${node.screenX} ${node.screenY})`,
                     children: [
                       /* @__PURE__ */ jsx("title", {
-                        children: node.kind === "memory" ? node.preview || node.label : node.label
+                        children: nodeLabel(node)
+                      }),
+                      recent.has(node.id) && /* @__PURE__ */ jsx("circle", {
+                        "aria-hidden": "true",
+                        className: "mnem-node-recent",
+                        r: node.screenRadius + 5
                       }),
                       /* @__PURE__ */ jsx("circle", {
                         className: node.kind === "memory" ? "mnem-node-memory" : "mnem-node-entity",
@@ -937,12 +1083,30 @@ function MemoryMap({
                         className: "mnem-node-label",
                         x: node.screenRadius + 4,
                         y: "4",
-                        children: node.kind === "memory" ? node.preview || node.label : node.label
+                        children: nodeLabel(node)
                       })
                     ]
                   }, node.id))
                 ]
               })
+            }),
+            hovered && byId.get(hovered.id) && /* @__PURE__ */ jsxs("div", {
+              id: "mnem-node-tooltip",
+              role: "tooltip",
+              className: "mnem-node-tooltip",
+              style: { left: hovered.x, top: hovered.y },
+              children: [
+                /* @__PURE__ */ jsx("strong", {
+                  children: nodeLabel(byId.get(hovered.id))
+                }),
+                /* @__PURE__ */ jsxs("span", {
+                  children: [
+                    degree.get(hovered.id) || 0,
+                    " connections",
+                    byId.get(hovered.id)?.category ? ` · ${byId.get(hovered.id)?.category}` : ""
+                  ]
+                })
+              ]
             }),
             /* @__PURE__ */ jsx(MapLegend, {
               categoryColors,
@@ -961,13 +1125,15 @@ function MemoryMap({
           ]
         }),
         selected && /* @__PURE__ */ jsx(NodeInspector, {
+          canGoBack: selectionHistory.length > 0,
           capabilities,
           ctx,
           edges: graph.edges,
           node: selected,
           nodes: graph.nodes,
-          onClose: () => setSelectedId(null),
-          onSelect: setSelectedId
+          onBack: goBack,
+          onClose: clearSelection,
+          onSelect: selectNode
         })
       ]
     })
@@ -1118,12 +1284,16 @@ function MemoryDetail({
           /* @__PURE__ */ jsx("span", {
             children: "Memory details"
           }),
-          /* @__PURE__ */ jsx(Button, {
-            "aria-label": "Close details",
-            onClick: onClose,
-            size: "icon-xs",
-            variant: "ghost",
-            children: /* @__PURE__ */ jsx(icons.X, {})
+          /* @__PURE__ */ jsx(Tip, {
+            label: "Close details",
+            children: /* @__PURE__ */ jsx(Button, {
+              "aria-label": "Close details",
+              onClick: onClose,
+              size: "icon-xs",
+              title: "Close details",
+              variant: "ghost",
+              children: /* @__PURE__ */ jsx(icons.X, {})
+            })
           })
         ]
       }),
@@ -1247,10 +1417,37 @@ function MemoriesView({ capabilities, ctx, profile }) {
             options: [{ id: "all", label: "All" }, { id: "working", label: "Working" }, { id: "episodic", label: "Episodic" }],
             value: kind
           }),
-          /* @__PURE__ */ jsx(SegmentedControl, {
-            onChange: setSort,
-            options: [{ id: "importance", label: "Importance" }, { id: "recent", label: "Recent" }, { id: "recall", label: "Most recalled" }],
-            value: sort
+          /* @__PURE__ */ jsxs(Select, {
+            onValueChange: (value) => setSort(value),
+            value: sort,
+            children: [
+              /* @__PURE__ */ jsxs(SelectTrigger, {
+                "aria-label": "Sort memories",
+                className: "mnem-sort",
+                children: [
+                  /* @__PURE__ */ jsx(icons.ArrowUp, {
+                    "aria-hidden": "true"
+                  }),
+                  /* @__PURE__ */ jsx(SelectValue, {})
+                ]
+              }),
+              /* @__PURE__ */ jsxs(SelectContent, {
+                children: [
+                  /* @__PURE__ */ jsx(SelectItem, {
+                    value: "importance",
+                    children: "Importance"
+                  }),
+                  /* @__PURE__ */ jsx(SelectItem, {
+                    value: "recent",
+                    children: "Recent"
+                  }),
+                  /* @__PURE__ */ jsx(SelectItem, {
+                    value: "recall",
+                    children: "Most recalled"
+                  })
+                ]
+              })
+            ]
           })
         ]
       }),
@@ -1414,11 +1611,11 @@ function Styles() {
     .mnem-overview-grid,.mnem-chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px}.mnem-section{min-width:0;border-top:1px solid var(--border);padding-top:16px}.mnem-section-title{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:12px}.mnem-section-title h2{margin:0 0 4px;font-size:14px}.mnem-section-title>svg{color:var(--muted-foreground)}
     .mnem-activity{display:block;width:100%;height:180px;overflow:visible}.mnem-gridline{stroke:var(--border);stroke-width:1}.mnem-line{fill:none;stroke:var(--ui-accent);stroke-width:2.4}.mnem-area{fill:var(--ui-accent);opacity:.07}.mnem-chart-axis{display:flex;justify-content:space-between;color:var(--muted-foreground);font-size:9px}
     .mnem-bars{display:flex;flex-direction:column;gap:11px}.mnem-bar{display:grid;grid-template-columns:92px minmax(0,1fr) auto;align-items:center;gap:10px;outline:none}.mnem-bar>span,.mnem-bar>strong{font-size:10px}.mnem-bar>span{color:var(--muted-foreground)}.mnem-bar>strong{min-width:30px;text-align:right}.mnem-bar>i{display:block;height:6px;overflow:hidden;background:var(--accent)}.mnem-bar>i>b{display:block;height:100%;min-width:2px;background:var(--ui-accent)}
-    .mnem-map-shell{border-top:1px solid var(--border);padding-top:16px}.mnem-map-shell.is-immersive{display:flex;min-height:0;border-top:0;padding-top:0}.mnem-map-shell.is-immersive .mnem-map-layout{flex:1;min-height:0}.mnem-map-shell.is-fullscreen{position:fixed;inset:0;z-index:999;display:flex;flex-direction:column;padding:12px;background:var(--background)}.mnem-map-shell.is-fullscreen .mnem-map-layout{flex:1;min-height:0}.mnem-map-shell.is-fullscreen .mnem-map-canvas>svg{min-height:0;height:100%}.mnem-map-layout{position:relative;display:grid;grid-template-columns:minmax(0,1fr);min-height:520px;border:1px solid var(--border);overflow:hidden}.mnem-map-canvas{position:relative;min-width:0;min-height:0;background:var(--background)}.mnem-map-canvas>svg{display:block;width:100%;height:100%;min-height:520px;touch-action:none;cursor:grab}.mnem-map-shell.is-immersive .mnem-map-canvas>svg{min-height:0}.mnem-map-canvas>svg:active{cursor:grabbing}.mnem-map-modes,.mnem-map-actions{position:absolute;top:12px;z-index:4;display:flex;align-items:center;gap:8px;padding:4px;border:1px solid var(--border);background:color-mix(in srgb,var(--background) 92%,transparent);box-shadow:0 8px 24px rgba(0,0,0,.08);backdrop-filter:blur(12px)}.mnem-map-modes{left:12px;flex-direction:column;align-items:flex-start}.mnem-map-actions{right:12px}.mnem-map-search{width:190px}
-    .mnem-edge{stroke:var(--border);stroke-width:1;vector-effect:non-scaling-stroke}.mnem-edge.is-highlighted{stroke:var(--ui-accent);stroke-width:1.8}.mnem-edge-label{fill:var(--ui-accent);font-size:8px;text-anchor:middle;paint-order:stroke;stroke:var(--background);stroke-width:3px}.mnem-node{cursor:pointer;outline:none;transition:opacity .16s}.mnem-node circle{stroke:var(--background);stroke-width:1.5;vector-effect:non-scaling-stroke}.mnem-node.is-connected circle{stroke:var(--ui-accent);stroke-width:2}.mnem-node.is-selected circle{stroke:var(--ui-accent);stroke-width:3}.mnem-node-entity{fill:var(--ui-accent)}.mnem-node-memory{fill:var(--foreground);opacity:.72}.mnem-node-label{fill:var(--foreground);font-size:9px;font-weight:600;paint-order:stroke;stroke:var(--background);stroke-width:4px;stroke-linejoin:round;max-width:160px}
-    .mnem-legend{position:absolute;left:12px;bottom:12px;display:flex;align-items:center;gap:8px;padding:5px 7px;border:1px solid var(--border);background:color-mix(in srgb,var(--background) 94%,transparent);font-size:9px;color:var(--muted-foreground);box-shadow:0 8px 24px rgba(0,0,0,.08);backdrop-filter:blur(12px)}.mnem-legend [role=group]{height:24px}.mnem-legend [role=group] button{height:22px;padding:0 7px;font-size:9px}.mnem-legend-items{display:flex;align-items:center;gap:9px}.mnem-legend-row{display:flex;align-items:center;gap:5px;white-space:nowrap}.mnem-legend-row span{color:var(--muted-foreground);opacity:.75}.mnem-dot{width:7px;height:7px;border-radius:50%;flex:none}.mnem-dot-entity{background:var(--ui-accent)}.mnem-dot-memory{background:var(--foreground);opacity:.72}.mnem-line-key{width:12px;height:1px;background:var(--border)}.mnem-map-help{position:absolute;right:12px;bottom:14px;font-size:9px;color:var(--muted-foreground)}
-    .mnem-inspector{position:absolute;z-index:6;top:62px;right:12px;bottom:12px;width:min(340px,calc(100% - 24px));min-width:0;border:1px solid var(--border);padding:18px;overflow:auto;background:color-mix(in srgb,var(--background) 97%,transparent);box-shadow:0 18px 48px rgba(0,0,0,.18);backdrop-filter:blur(16px)}.mnem-detail{min-width:0;border-left:1px solid var(--border);padding:18px;overflow:auto;background:var(--background)}.mnem-inspector-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.mnem-inspector h2,.mnem-detail h2{font-size:18px;line-height:1.25;margin:12px 0}.mnem-inspector-content{font-size:11px;line-height:1.55;color:var(--muted-foreground)}.mnem-badges{display:flex;gap:6px;flex-wrap:wrap}.mnem-badge.is-working{border-color:color-mix(in srgb,#38bdf8 42%,var(--border));background:color-mix(in srgb,#38bdf8 12%,transparent);color:color-mix(in srgb,#38bdf8 78%,var(--foreground))}.mnem-badge.is-episodic{border-color:color-mix(in srgb,#a78bfa 45%,var(--border));background:color-mix(in srgb,#a78bfa 12%,transparent);color:color-mix(in srgb,#a78bfa 78%,var(--foreground))}.mnem-badge.is-relationship{border-color:color-mix(in srgb,#34d399 42%,var(--border));background:color-mix(in srgb,#34d399 12%,transparent);color:color-mix(in srgb,#34d399 78%,var(--foreground))}.mnem-badge.is-consolidation{border-color:color-mix(in srgb,#f59e0b 42%,var(--border));background:color-mix(in srgb,#f59e0b 12%,transparent);color:color-mix(in srgb,#f59e0b 78%,var(--foreground))}.mnem-badge.is-trust-stated{border-color:color-mix(in srgb,#22c55e 38%,var(--border));color:color-mix(in srgb,#22c55e 72%,var(--foreground))}.mnem-badge.is-trust-unknown{color:var(--muted-foreground)}.mnem-badge.is-trust-inferred,.mnem-badge.is-trust-imported,.mnem-badge.is-trust-tool{border-color:color-mix(in srgb,#f59e0b 38%,var(--border));color:color-mix(in srgb,#f59e0b 72%,var(--foreground))}.mnem-meta{margin:20px 0}.mnem-meta>div{display:grid;grid-template-columns:86px minmax(0,1fr);gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:11px}.mnem-meta dt{color:var(--muted-foreground)}.mnem-meta dd{margin:0;text-align:right;overflow-wrap:anywhere}.mnem-linked h3{display:flex;justify-content:space-between;margin:20px 0 6px;font-size:11px}.mnem-linked button{display:block;width:100%;padding:9px 0;border:0;border-top:1px solid var(--border);background:transparent;color:var(--foreground);text-align:left;cursor:pointer}.mnem-linked button span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}.mnem-linked button small{color:var(--ui-accent);font-size:9px}.mnem-linked p{color:var(--muted-foreground);font-size:11px}.mnem-maintenance{display:flex;gap:8px;margin:14px 0}
-    .mnem-browser{min-height:100%;display:flex;flex-direction:column}.mnem-browser-toolbar{display:flex;align-items:center;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--border)}.mnem-browser-search{flex:1;max-width:520px}.mnem-browser-context{margin:10px 0 0;color:var(--muted-foreground);font-size:10px;line-height:1.45}.mnem-browser-layout{display:grid;grid-template-columns:minmax(0,1fr);min-height:0}.mnem-browser-layout.has-detail{grid-template-columns:minmax(0,1fr) 320px}.mnem-memory-list{min-width:0}.mnem-memory-row{display:grid;grid-template-columns:minmax(0,1fr) 112px;align-items:center;gap:20px;width:100%;padding:15px 8px;border:0;border-bottom:1px solid var(--border);background:transparent;color:var(--foreground);text-align:left;cursor:pointer}.mnem-memory-row:hover,.mnem-memory-row.is-selected{background:var(--accent)}.mnem-memory-row p{margin:8px 0 6px;font-size:12px;line-height:1.5}.mnem-memory-row small{color:var(--muted-foreground);font-size:10px}.mnem-strength{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;outline:none}.mnem-strength>span{grid-column:1;display:block;height:5px;overflow:hidden;background:var(--accent)}.mnem-strength>span>i{display:block;height:100%;background:var(--ui-accent)}.mnem-strength>strong{grid-column:2;grid-row:1 / span 2;font-size:18px;font-variant-numeric:tabular-nums}.mnem-strength>small{grid-column:1;font-size:8px;letter-spacing:.1em;text-transform:uppercase}.mnem-row-skeleton{height:72px;margin:10px 0}.mnem-detail{position:sticky;top:0;height:calc(100vh - 190px)}.mnem-detail-content{font-size:12px;line-height:1.6}.mnem-readonly-note{display:flex;align-items:center;gap:7px;padding:9px;border:1px solid var(--border);color:var(--muted-foreground);font-size:10px}
+    .mnem-map-shell{border-top:1px solid var(--border);padding-top:16px}.mnem-map-shell.is-immersive{display:flex;min-height:0;border-top:0;padding-top:0}.mnem-map-shell.is-immersive .mnem-map-layout{flex:1;min-height:0}.mnem-map-shell.is-fullscreen{position:fixed;inset:0;z-index:999;display:flex;flex-direction:column;padding:12px;background:var(--background)}.mnem-map-shell.is-fullscreen .mnem-map-layout{flex:1;min-height:0}.mnem-map-shell.is-fullscreen .mnem-map-canvas>svg{min-height:0;height:100%}.mnem-map-layout{position:relative;display:grid;grid-template-columns:minmax(0,1fr);min-height:520px;border:1px solid var(--border);overflow:hidden}.mnem-map-canvas{position:relative;min-width:0;min-height:0;background:var(--background)}.mnem-map-canvas>svg{display:block;width:100%;height:100%;min-height:520px;touch-action:none;cursor:grab}.mnem-map-shell.is-immersive .mnem-map-canvas>svg{min-height:0}.mnem-map-canvas>svg:active{cursor:grabbing}.mnem-map-modes,.mnem-map-actions{position:absolute;top:12px;z-index:8;display:flex;align-items:center;gap:8px;padding:4px;border:1px solid var(--border);background:color-mix(in srgb,var(--background) 92%,transparent);box-shadow:0 8px 24px rgba(0,0,0,.08);backdrop-filter:blur(12px)}.mnem-map-modes{left:12px;flex-direction:column;align-items:flex-start}.mnem-map-actions{right:12px}.mnem-map-search{width:190px}
+    .mnem-edge{stroke:color-mix(in srgb,var(--muted-foreground) 42%,transparent);stroke-width:.85;opacity:.62;vector-effect:non-scaling-stroke}.mnem-edge.is-highlighted{stroke:var(--ui-accent);stroke-width:1.8;opacity:1}.mnem-edge-label{fill:var(--ui-accent);font-size:8px;text-anchor:middle;paint-order:stroke;stroke:var(--background);stroke-width:3px}.mnem-node{cursor:pointer;outline:none;transition:opacity .16s}.mnem-node circle{stroke:var(--background);stroke-width:1.5;vector-effect:non-scaling-stroke;transform-box:fill-box;transform-origin:center;transition:transform .14s,stroke .14s,filter .14s}.mnem-node:hover circle:not(.mnem-node-recent),.mnem-node:focus-visible circle:not(.mnem-node-recent){transform:scale(1.13);stroke:var(--ui-accent);stroke-width:2.2;filter:drop-shadow(0 0 5px color-mix(in srgb,var(--ui-accent) 52%,transparent))}.mnem-node.is-connected circle{stroke:var(--ui-accent);stroke-width:2}.mnem-node.is-selected circle{stroke:var(--ui-accent);stroke-width:3}.mnem-node-entity{fill:var(--ui-accent)}.mnem-node-memory{fill:var(--foreground);opacity:.72}.mnem-node-recent{fill:none;stroke:#f59e0b!important;stroke-width:1.6!important;opacity:.9;animation:mnem-recent-pulse 2.4s ease-in-out infinite}.mnem-node-label{fill:var(--foreground);font-size:9px;font-weight:600;paint-order:stroke;stroke:var(--background);stroke-width:4px;stroke-linejoin:round}.mnem-node-tooltip{position:absolute;z-index:12;max-width:260px;pointer-events:none;display:grid;gap:2px;padding:7px 9px;border:1px solid var(--border);background:color-mix(in srgb,var(--background) 96%,transparent);box-shadow:0 12px 30px rgba(0,0,0,.18);backdrop-filter:blur(12px);font-size:10px}.mnem-node-tooltip strong,.mnem-node-tooltip span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mnem-node-tooltip span{color:var(--muted-foreground);font-size:9px}@keyframes mnem-recent-pulse{0%,100%{opacity:.42;transform:scale(.96)}50%{opacity:1;transform:scale(1.08)}}@media(prefers-reduced-motion:reduce){.mnem-node-recent{animation:none}}
+    .mnem-legend{position:absolute;z-index:8;left:12px;bottom:12px;display:flex;align-items:center;gap:8px;padding:5px 7px;border:1px solid var(--border);background:color-mix(in srgb,var(--background) 94%,transparent);font-size:9px;color:var(--muted-foreground);box-shadow:0 8px 24px rgba(0,0,0,.08);backdrop-filter:blur(12px)}.mnem-legend [role=group]{height:24px}.mnem-legend [role=group] button{height:22px;padding:0 7px;font-size:9px}.mnem-legend-items{display:flex;align-items:center;gap:9px}.mnem-legend-row{display:flex;align-items:center;gap:5px;white-space:nowrap}.mnem-legend-row span{color:var(--muted-foreground);opacity:.75}.mnem-dot{width:7px;height:7px;border-radius:50%;flex:none}.mnem-dot-entity{background:var(--ui-accent)}.mnem-dot-memory{background:var(--foreground);opacity:.72}.mnem-recent-key{width:8px;height:8px;border:1.5px solid #f59e0b;border-radius:50%}.mnem-line-key{width:12px;height:1px;background:var(--muted-foreground);opacity:.6}.mnem-map-help{position:absolute;right:12px;bottom:14px;font-size:9px;color:var(--muted-foreground)}
+    .mnem-inspector{position:absolute;z-index:10;top:62px;right:12px;bottom:12px;width:min(340px,calc(100% - 24px));min-width:0;border:1px solid var(--border);padding:18px;overflow:auto;background:color-mix(in srgb,var(--background) 97%,transparent);box-shadow:0 18px 48px rgba(0,0,0,.18);backdrop-filter:blur(16px)}.mnem-detail{min-width:0;border-left:1px solid var(--border);padding:18px;overflow:auto;background:var(--background)}.mnem-inspector-head,.mnem-inspector-nav{display:flex;align-items:center;gap:8px}.mnem-inspector-head{justify-content:space-between}.mnem-inspector h2,.mnem-detail h2{font-size:18px;line-height:1.25;margin:12px 0}.mnem-inspector-content{font-size:11px;line-height:1.55;color:var(--muted-foreground)}.mnem-badges{display:flex;gap:6px;flex-wrap:wrap}.mnem-badge.is-working{border-color:color-mix(in srgb,#38bdf8 42%,var(--border));background:color-mix(in srgb,#38bdf8 12%,transparent);color:color-mix(in srgb,#38bdf8 78%,var(--foreground))}.mnem-badge.is-episodic{border-color:color-mix(in srgb,#a78bfa 45%,var(--border));background:color-mix(in srgb,#a78bfa 12%,transparent);color:color-mix(in srgb,#a78bfa 78%,var(--foreground))}.mnem-badge.is-relationship{border-color:color-mix(in srgb,#34d399 42%,var(--border));background:color-mix(in srgb,#34d399 12%,transparent);color:color-mix(in srgb,#34d399 78%,var(--foreground))}.mnem-badge.is-consolidation{border-color:color-mix(in srgb,#f59e0b 42%,var(--border));background:color-mix(in srgb,#f59e0b 12%,transparent);color:color-mix(in srgb,#f59e0b 78%,var(--foreground))}.mnem-badge.is-trust-stated{border-color:color-mix(in srgb,#22c55e 38%,var(--border));color:color-mix(in srgb,#22c55e 72%,var(--foreground))}.mnem-badge.is-trust-unknown{color:var(--muted-foreground)}.mnem-badge.is-trust-inferred,.mnem-badge.is-trust-imported,.mnem-badge.is-trust-tool{border-color:color-mix(in srgb,#f59e0b 38%,var(--border));color:color-mix(in srgb,#f59e0b 72%,var(--foreground))}.mnem-meta{margin:20px 0}.mnem-meta>div{display:grid;grid-template-columns:86px minmax(0,1fr);gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:11px}.mnem-meta dt{color:var(--muted-foreground)}.mnem-meta dd{margin:0;text-align:right;overflow-wrap:anywhere}.mnem-linked h3{display:flex;justify-content:space-between;margin:20px 0 8px;font-size:11px}.mnem-linked button{display:block;width:100%;margin:5px 0;padding:9px 10px;border:1px solid transparent;border-radius:5px;background:transparent;color:var(--foreground);text-align:left;cursor:pointer;transition:border-color .14s,background .14s}.mnem-linked button:hover,.mnem-linked button:focus-visible{border-color:var(--border);background:var(--accent);outline:none}.mnem-linked button span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}.mnem-linked button small{color:var(--ui-accent);font-size:9px}.mnem-linked p{color:var(--muted-foreground);font-size:11px}.mnem-maintenance{display:flex;gap:8px;margin:14px 0}
+    .mnem-browser{min-height:100%;display:flex;flex-direction:column}.mnem-browser-toolbar{display:flex;align-items:center;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--border)}.mnem-browser-search{flex:1;max-width:520px}.mnem-sort{width:152px;flex:none}.mnem-sort svg{width:14px}.mnem-browser-context{margin:10px 0 0;color:var(--muted-foreground);font-size:10px;line-height:1.45}.mnem-browser-layout{display:grid;grid-template-columns:minmax(0,1fr);min-height:0}.mnem-browser-layout.has-detail{grid-template-columns:minmax(0,1fr) 320px}.mnem-memory-list{min-width:0}.mnem-memory-row{display:grid;grid-template-columns:minmax(0,1fr) 112px;align-items:center;gap:20px;width:100%;padding:15px 8px;border:0;border-bottom:1px solid var(--border);background:transparent;color:var(--foreground);text-align:left;cursor:pointer}.mnem-memory-row:hover,.mnem-memory-row.is-selected{background:var(--accent)}.mnem-memory-row p{margin:8px 0 6px;font-size:12px;line-height:1.5}.mnem-memory-row small{color:var(--muted-foreground);font-size:10px}.mnem-strength{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;outline:none}.mnem-strength>span{grid-column:1;display:block;height:5px;overflow:hidden;background:color-mix(in srgb,var(--muted-foreground) 22%,transparent)}.mnem-strength>span>i{display:block;height:100%;background:var(--ui-accent)}.mnem-strength>strong{grid-column:2;grid-row:1 / span 2;font-size:18px;font-variant-numeric:tabular-nums}.mnem-strength>small{grid-column:1;font-size:8px;letter-spacing:.1em;text-transform:uppercase}.mnem-row-skeleton{height:72px;margin:10px 0}.mnem-detail{position:sticky;top:0;height:calc(100vh - 190px)}.mnem-detail-content{font-size:12px;line-height:1.6}.mnem-readonly-note{display:flex;align-items:center;gap:7px;padding:9px;border:1px solid var(--border);color:var(--muted-foreground);font-size:10px}
     .mnem-timeline{max-width:980px;padding-top:8px}.mnem-timeline section>header{display:flex;align-items:center;gap:8px;padding:16px 0 8px}.mnem-timeline section>header h2{font-size:11px;margin:0;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.11em}.mnem-timeline-row{display:grid;grid-template-columns:30px minmax(0,1fr);gap:12px;padding:11px 0;border-bottom:1px solid var(--border)}.mnem-timeline-icon{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border:1px solid var(--border);border-radius:50%;color:var(--ui-accent)}.mnem-timeline-icon.is-triple{color:#34d399}.mnem-timeline-icon.is-consolidation{color:#f59e0b}.mnem-timeline-icon svg{width:13px}.mnem-timeline-row>div>div{display:flex;align-items:center;justify-content:space-between;gap:16px}.mnem-timeline-title{display:flex;align-items:center;gap:7px;min-width:0}.mnem-timeline-row strong{font-size:11px}.mnem-timeline-row span,.mnem-timeline-row p{color:var(--muted-foreground);font-size:10px}.mnem-timeline-row p{margin:4px 0 0;line-height:1.5}
     @media(max-width:900px){.mnem-header{padding:12px 18px}.mnem-content{padding:18px}.mnem-content.is-explore{padding:12px 18px 18px}.mnem-tabs{padding:0 18px}.mnem-overview-grid,.mnem-chart-grid{grid-template-columns:1fr}.mnem-stats{grid-template-columns:repeat(2,1fr)}.mnem-stat:nth-child(2){border-right:0}.mnem-stat:nth-child(-n+2){border-bottom:1px solid var(--border)}.mnem-detail{border-left:0;border-top:1px solid var(--border)}.mnem-browser-toolbar{align-items:stretch;flex-wrap:wrap}.mnem-browser-search{max-width:none;min-width:240px}.mnem-browser-layout.has-detail{grid-template-columns:1fr}.mnem-detail{position:relative;height:auto}.mnem-memory-row{grid-template-columns:minmax(0,1fr) 94px}.mnem-map-help{display:none}.mnem-map-search{width:130px}.mnem-map-modes{gap:4px}.mnem-profile span{display:none}}
   `
@@ -1573,7 +1770,7 @@ var plugin = {
         id: "sidebar",
         area: SIDEBAR_NAV_AREA,
         order: 45,
-        data: { path: ROUTE, label: "Memory", codicon: "graph" }
+        data: { path: ROUTE, label: "Memory", codicon: "circuit-board" }
       },
       {
         id: "open",
