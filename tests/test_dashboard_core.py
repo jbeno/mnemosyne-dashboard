@@ -438,6 +438,18 @@ def test_graph_returns_nodes_edges_and_filterable_metadata(tmp_path):
     assert graph['edges'][0]['object'] == 'local-only memory'
 
 
+def test_memory_map_excludes_structured_knowledge_relations(tmp_path):
+    db = tmp_path / 'mnemosyne.db'
+    make_db(db)
+
+    memory_map = DashboardStore(db).memory_map(limit=80)
+
+    assert memory_map['nodes']
+    assert {edge['kind'] for edge in memory_map['edges']} == {'memory'}
+    assert {edge['label'] for edge in memory_map['edges']} == {'mentions'}
+    assert not any(edge['label'] in {'prefers', 'uses', 'is'} for edge in memory_map['edges'])
+
+
 def test_knowledge_graph_reads_current_episodic_and_memoria_stores(tmp_path):
     db = tmp_path / 'mnemosyne.db'
     make_db(db)
@@ -468,12 +480,16 @@ def test_knowledge_graph_reads_current_episodic_and_memoria_stores(tmp_path):
     store = DashboardStore(db)
     relations = store.triples(limit=20)
     assert {row['knowledge_store'] for row in relations} == {'Temporal triples', 'Episodic graph', 'MEMORIA'}
+    memoria = next(row for row in relations if row['knowledge_store'] == 'MEMORIA')
+    assert memoria['created_at'] == '2026-01-03T00:00:00'
     assert store.stats()['counts']['triples'] == 5
     assert [row['object'] for row in store.triples(q='episodic', limit=10)] == ['episodic graph']
     graph = store.graph(q='MEMORIA', limit=10)
     assert {node['label'] for node in graph['nodes']} == {'Dashboard', 'MEMORIA'}
     assert {node['category'] for node in graph['nodes']} == {'MEMORIA'}
     assert {node['kind'] for node in graph['nodes']} == {'entity'}
+    assert all(node['occurred_at'] == '2026-01-03T00:00:00' for node in graph['nodes'])
+    assert graph['edges'][0]['occurred_at'] == '2026-01-03T00:00:00'
 
 
 def test_timeline_search_matches_session_id(tmp_path):

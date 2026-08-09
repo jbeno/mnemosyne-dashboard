@@ -63,7 +63,7 @@ export function NetworkMap({
   const spatial = useMemo(() => layoutNetwork(nodes, edges, mode), [edges, mode, nodes])
   const positioned = useMemo(() => projectNetwork(spatial, mode === "graph" ? { pitch: 0, yaw: 0 } : undefined), [mode, spatial])
   const byId = useMemo(() => new Map(positioned.map((node) => [node.id, node])), [positioned])
-  const labelPlacements = useMemo(() => chooseLabelPlacements(positioned, preview ? 12 : mode === "graph" ? 34 : mode === "neural" ? 28 : 26, preview ? 7 : mode === "graph" ? 14 : 12), [mode, positioned, preview])
+  const labelPlacements = useMemo(() => chooseLabelPlacements(positioned, preview), [positioned, preview])
   const visibleEdges = useMemo(() => limitNetworkEdges(edges, spatial, mode), [edges, mode, spatial])
   const edgeLabelIds = useMemo(() => chooseEdgeLabels(visibleEdges, byId, showEdgeLabels ? (mode === "graph" ? 72 : 28) : 0), [byId, mode, showEdgeLabels, visibleEdges])
   const connectedIds = useMemo(() => {
@@ -157,7 +157,20 @@ export function NetworkMap({
           onWheel={(event) => {
             if (preview) return
             event.preventDefault()
-            setZoom((value) => Math.max(0.28, Math.min(2.4, value * Math.exp(-event.deltaY * 0.001))))
+            const svg = event.currentTarget
+            const point = svg.createSVGPoint()
+            point.x = event.clientX
+            point.y = event.clientY
+            const matrix = svg.getScreenCTM()
+            if (!matrix) return
+            const focal = point.matrixTransform(matrix.inverse())
+            const nextZoom = Math.max(0.28, Math.min(2.4, zoom * Math.exp(-event.deltaY * 0.001)))
+            const ratio = nextZoom / zoom
+            setOffset((current) => ({
+              x: focal.x - 500 - (focal.x - 500 - current.x) * ratio,
+              y: focal.y - 310 - (focal.y - 310 - current.y) * ratio,
+            }))
+            setZoom(nextZoom)
           }}
           role="group"
           viewBox="0 0 1000 620"
@@ -264,12 +277,13 @@ function chooseEdgeLabels(edges: GraphEdge[], nodes: Map<string, ReturnType<type
   return selected
 }
 
-function chooseLabelPlacements(nodes: ReturnType<typeof projectNetwork>, limit: number, guaranteed: number) {
+function chooseLabelPlacements(nodes: ReturnType<typeof projectNetwork>, preview: boolean) {
   const selected = new Map<string, LabelPlacement>()
   const boxes: Array<{ bottom: number; left: number; right: number; top: number }> = []
-  const candidates = [...nodes].sort((a, b) => labelPriority(b) - labelPriority(a))
-  for (const [index, node] of candidates.entries()) {
-    if (selected.size >= limit) break
+  const largest = Math.max(0, ...nodes.map((node) => node.screenRadius))
+  const threshold = Math.max(preview ? 7.8 : 7.2, largest * (preview ? 0.72 : 0.6))
+  const candidates = nodes.filter((node) => node.screenRadius >= threshold).sort((a, b) => labelPriority(b) - labelPriority(a))
+  for (const node of candidates) {
     const label = shortLabel(node.label)
     const width = Math.max(28, label.length * 6.6)
     const radius = node.screenRadius
@@ -281,7 +295,6 @@ function chooseLabelPlacements(nodes: ReturnType<typeof projectNetwork>, limit: 
     ]
     const ranked = options.map((option) => ({ ...option, overlap: boxes.reduce((sum, box) => sum + overlapArea(option.box, box), 0) })).sort((left, right) => left.overlap - right.overlap)
     const best = ranked[0]
-    if (best.overlap > 0 && index >= guaranteed) continue
     selected.set(node.id, best.placement)
     boxes.push(best.box)
   }

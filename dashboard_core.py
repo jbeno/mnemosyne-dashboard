@@ -996,13 +996,36 @@ class DashboardStore:
                     FROM facts
                 """)
             if "memoria_kg" in tables:
-                selects.append("""
+                source_timestamps: list[str] = []
+                for memory_table in ("working_memory", "episodic_memory", "memories"):
+                    if memory_table not in tables:
+                        continue
+                    memory_columns = self._columns(con, memory_table)
+                    time_columns = [column for column in ("timestamp", "created_at") if column in memory_columns]
+                    if not time_columns or "id" not in memory_columns:
+                        continue
+                    time_value = (
+                        f"source_memory.{time_columns[0]}"
+                        if len(time_columns) == 1
+                        else f"COALESCE({', '.join(f'source_memory.{column}' for column in time_columns)})"
+                    )
+                    source_timestamps.append(
+                        f"(SELECT {time_value} FROM {memory_table} AS source_memory "
+                        "WHERE CAST(source_memory.id AS TEXT) = CAST(kg.source_memory_id AS TEXT) LIMIT 1)"
+                    )
+                memoria_created_at = (
+                    f"COALESCE({', '.join(source_timestamps)})" if len(source_timestamps) > 1
+                    else source_timestamps[0] if source_timestamps
+                    else "NULL"
+                )
+                selects.append(f"""
                     SELECT 'memoria:' || CAST(id AS TEXT) AS id,
                            subject, predicate, object,
                            NULL AS valid_from, NULL AS valid_until,
                            source_memory_id AS source, confidence,
-                           NULL AS created_at, 'MEMORIA' AS knowledge_store
-                    FROM memoria_kg
+                           {memoria_created_at} AS created_at,
+                           'MEMORIA' AS knowledge_store
+                    FROM memoria_kg AS kg
                 """)
             if not selects:
                 return []
@@ -1018,6 +1041,8 @@ class DashboardStore:
         node_ids: dict[str, str] = {}
         node_counts: dict[str, int] = {}
         node_stores: dict[str, dict[str, int]] = {}
+        node_first_seen: dict[str, str] = {}
+        node_last_seen: dict[str, str] = {}
         nodes: list[dict[str, Any]] = []
         edges: list[dict[str, Any]] = []
 
@@ -1033,9 +1058,15 @@ class DashboardStore:
             s = node(str(t["subject"]))
             o = node(str(t["object"]))
             store = str(t.get("knowledge_store") or "Knowledge")
+            occurred_at = str(t.get("created_at") or t.get("valid_from") or "")
             for label in (str(t["subject"]), str(t["object"])):
                 stores = node_stores.setdefault(label, {})
                 stores[store] = stores.get(store, 0) + 1
+                if occurred_at:
+                    if not node_first_seen.get(label) or occurred_at < node_first_seen[label]:
+                        node_first_seen[label] = occurred_at
+                    if not node_last_seen.get(label) or occurred_at > node_last_seen[label]:
+                        node_last_seen[label] = occurred_at
             edges.append({
                 "id": f"e{t['id']}",
                 "triple_id": t.get("id"),
@@ -1048,6 +1079,7 @@ class DashboardStore:
                 "valid_from": t.get("valid_from"),
                 "valid_until": t.get("valid_until"),
                 "created_at": t.get("created_at"),
+                "occurred_at": occurred_at,
                 "source_name": t.get("source"),
                 "knowledge_store": t.get("knowledge_store"),
             })
@@ -1056,6 +1088,9 @@ class DashboardStore:
             stores = node_stores.get(n["label"], {})
             n["category"] = max(stores, key=stores.get) if stores else "Knowledge"
             n["kind"] = "entity"
+            n["first_seen_at"] = node_first_seen.get(n["label"], "")
+            n["occurred_at"] = node_first_seen.get(n["label"], "")
+            n["last_seen"] = node_last_seen.get(n["label"], "")
         return {"nodes": nodes, "edges": edges}
 
     def consolidations(self, q: str = "", limit: int = 100) -> list[dict[str, Any]]:
@@ -1895,7 +1930,14 @@ class DashboardStore:
             },
         }
 
-    def constellation(self, limit: int = 240) -> dict[str, Any]:
+    def constellation(self, limit: int = 240, *, include_knowledge: bool = True) -> dict[str, Any]:
+        """Build the legacy combined visualization payload.
+
+        ``include_knowledge`` remains true for compatibility with the
+        standalone dashboard's historical constellation.  Native clients use
+        :meth:`memory_map` instead so dashboard-derived ``mentions`` links are
+        not conflated with Mnemosyne's structured knowledge relations.
+        """
         limit = max(40, min(int(limit or 240), 600))
         nodes_by_label: dict[str, dict[str, Any]] = {}
         edges: list[dict[str, Any]] = []
@@ -1904,23 +1946,27 @@ class DashboardStore:
             label = str(label or "unknown").strip()[:80]
             if not label:
                 label = "unknown"
-            node = nodes_by_label.setdefault(label, {"id": f"n{len(nodes_by_label)+1}", "label": label, "kind": kind, "category": category, "weight": 0.0, "count": 0, "last_seen": ""})
+            node = nodes_by_label.setdefault(label, {"id": f"n{len(nodes_by_label)+1}", "label": label, "kind": kind, "category": category, "weight": 0.0, "count": 0, "first_seen_at": "", "occurred_at": "", "last_seen": ""})
             node["weight"] = round(float(node["weight"]) + weight, 3)
             node["count"] = int(node["count"]) + 1
+            if timestamp and (not node.get("first_seen_at") or timestamp < str(node["first_seen_at"])):
+                node["first_seen_at"] = timestamp
+                node["occurred_at"] = timestamp
             if timestamp and timestamp > str(node.get("last_seen") or ""):
                 node["last_seen"] = timestamp
             if node.get("category") == "Other" and category != "Other":
                 node["category"] = category
             return node
 
-        triples = self.triples(limit=limit)
-        for t in triples:
-            ts = t.get("created_at") or t.get("valid_from") or ""
-            s_label, o_label = str(t.get("subject") or ""), str(t.get("object") or "")
-            category = self._category_for_text(f"{s_label} {t.get('predicate')} {o_label}")
-            s = touch(s_label, weight=float(t.get("confidence") or 0.8), category=category, timestamp=ts)
-            o = touch(o_label, weight=float(t.get("confidence") or 0.8), category=category, timestamp=ts)
-            edges.append({"id": f"e{t.get('id')}", "source": s["id"], "target": o["id"], "label": t.get("predicate"), "kind": "triple", "item": t})
+        if include_knowledge:
+            triples = self.triples(limit=limit)
+            for t in triples:
+                ts = t.get("created_at") or t.get("valid_from") or ""
+                s_label, o_label = str(t.get("subject") or ""), str(t.get("object") or "")
+                category = self._category_for_text(f"{s_label} {t.get('predicate')} {o_label}")
+                s = touch(s_label, weight=float(t.get("confidence") or 0.8), category=category, timestamp=ts)
+                o = touch(o_label, weight=float(t.get("confidence") or 0.8), category=category, timestamp=ts)
+                edges.append({"id": f"e{t.get('id')}", "source": s["id"], "target": o["id"], "label": t.get("predicate"), "kind": "triple", "occurred_at": ts, "valid_from": t.get("valid_from"), "valid_until": t.get("valid_until"), "item": t})
 
         memories = self.list_memories(kind="all", status="active", sort="importance", limit=120)
         for m in memories:
@@ -1932,13 +1978,22 @@ class DashboardStore:
             m_node["memory_id"] = m.get("id")
             for entity in self._entity_terms(content, limit=3):
                 e_node = touch(entity, category=category, timestamp=ts)
-                edges.append({"id": f"em{m.get('id')}-{e_node['id']}", "source": m_node["id"], "target": e_node["id"], "label": "mentions", "kind": "memory", "item": {"memory_id": m.get("id"), "entity": entity}})
+                edges.append({"id": f"em{m.get('id')}-{e_node['id']}", "source": m_node["id"], "target": e_node["id"], "label": "mentions", "kind": "memory", "occurred_at": ts, "item": {"memory_id": m.get("id"), "entity": entity}})
 
         nodes = sorted(nodes_by_label.values(), key=lambda n: (float(n.get("weight") or 0), str(n.get("last_seen") or "")), reverse=True)[:limit]
         kept = {n["id"] for n in nodes}
         edges = [e for e in edges if e["source"] in kept and e["target"] in kept][:limit * 2]
         clusters = Counter(str(n.get("category") or "Other") for n in nodes)
         return {"read_only": True, "nodes": nodes, "edges": edges, "clusters": [{"label": k, "count": v} for k, v in clusters.most_common()]}
+
+    def memory_map(self, limit: int = 240) -> dict[str, Any]:
+        """Return retained memories and dashboard-derived entity mentions.
+
+        This is a navigation aid over memory content, not Mnemosyne's
+        subject/predicate/object knowledge graph.  The latter is exposed by
+        :meth:`graph` and preserves predicates on its edges.
+        """
+        return self.constellation(limit=limit, include_knowledge=False)
 
     def global_search(self, q: str = "", limit: int = 30) -> dict[str, Any]:
         q = (q or "").strip()
@@ -1991,12 +2046,35 @@ class DashboardStore:
             "items": items,
         }
 
-    def timeline(self, q: str = "", group: str = "day", limit: int = 300) -> dict[str, Any]:
+    def timeline(
+        self,
+        q: str = "",
+        group: str = "day",
+        limit: int = 300,
+        event_type: str = "all",
+        memory_kind: str = "all",
+        veracity: str = "",
+        degradation_tier: int | str | None = None,
+    ) -> dict[str, Any]:
         limit = max(1, min(int(limit or 300), 1000))
         q = (q or "").strip()
-        memories = self.list_memories(kind="all", q=q, sort="recent", limit=limit)
-        triples = self.triples(q=q, limit=limit)
-        consolidations = self.consolidations(q=q, limit=limit)
+        event_type = event_type if event_type in {"all", "memory", "triple", "consolidation"} else "all"
+        memory_kind = memory_kind if memory_kind in {"all", "working", "episodic"} else "all"
+        memory_filters_active = memory_kind != "all" or bool(veracity) or degradation_tier not in (None, "")
+        memories = (
+            self.list_memories(
+                kind=memory_kind,
+                q=q,
+                sort="recent",
+                limit=limit,
+                veracity=veracity,
+                degradation_tier=degradation_tier,
+            )
+            if event_type in {"all", "memory"}
+            else []
+        )
+        triples = self.triples(q=q, limit=limit) if event_type in {"all", "triple"} and not memory_filters_active else []
+        consolidations = self.consolidations(q=q, limit=limit) if event_type in {"all", "consolidation"} and not memory_filters_active else []
         events: list[dict[str, Any]] = []
         for m in memories:
             ts = m.get("timestamp") or m.get("created_at") or ""
@@ -2015,7 +2093,17 @@ class DashboardStore:
             else:
                 key = (e.get("timestamp") or "unknown")[:10]
             groups.setdefault(key or "unknown", []).append(e)
-        return {"query": q, "group": group, "groups": [{"key": k, "events": v, "count": len(v)} for k, v in groups.items()]}
+        return {
+            "query": q,
+            "group": group,
+            "filters": {
+                "event_type": event_type,
+                "memory_kind": memory_kind,
+                "veracity": veracity,
+                "degradation_tier": degradation_tier,
+            },
+            "groups": [{"key": k, "events": v, "count": len(v)} for k, v in groups.items()],
+        }
 
     # ── MEMORIA tables ─────────────────────────────────────────────────
 
